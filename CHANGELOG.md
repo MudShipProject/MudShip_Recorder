@@ -2,6 +2,20 @@
 
 All notable changes to this package will be documented in this file.
 
+## [0.4.1] - 2026-06-27
+
+### Changed
+- **モーション記録対象を限定（パフォーマンス改善）**：Animator 配下の階層全走査をやめ、
+  `Animator.GetBoneTransform` でヒューマノイドにマップされたボーン（指含む）＋ `Add Bones`
+  （ツイスト等ヒューマノイド外）のみを記録対象にした。毎フレームの `Transform.localRotation`
+  読み出し（ネイティブ interop）を大幅に削減し、録画中の FPS 低下を抑える。
+- `SkeletonDefinition.FromAnimator`：全走査 → ヒューマノイド収集＋`addBones` へ変更。
+  `localPosition` は Hip のみ記録（`addBones` は `localRotation` のみ）。Generic は明示ボーン
+  （`hipBone`/`addBones`）のみ記録。`FromHierarchy`（全走査）は髪・スカート等まで録りたい用途向けに残置。
+- `MS_Recorder`：`Add Bones` のツールチップ（位置 → 回転の追加ボーン）と未解決時の警告を新仕様に更新。
+
+※ `.msr` ファイルはヘッダにボーンテーブルを自己記述するため、コンバータは無改修で従来ファイル・新ファイルとも変換可能。
+
 ## [0.4.0] - 2026-06-26
 
 録画系を `MS_Recorder`（マスター）へ再設計し、Motion / Facial / Transform / Camera の各ストリームを追加。
