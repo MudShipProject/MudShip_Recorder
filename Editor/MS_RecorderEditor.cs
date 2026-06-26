@@ -99,24 +99,32 @@ namespace MudShip.MotionRecorder.Editor
 
         // ---- スロット要素の描画/高さ計算（共通） --------------------------------
 
+        static GUIStyle _badgeStyle;
+        static GUIStyle BadgeStyle =>
+            _badgeStyle ??= new GUIStyle(EditorStyles.miniBoldLabel) { alignment = TextAnchor.MiddleRight };
+
         float DrawOrMeasure(Rect rect, int index, bool draw)
         {
             var el = _slots.GetArrayElementAtIndex(index);
             var typeProp = el.FindPropertyRelative("type");
+            var labelProp = el.FindPropertyRelative("label");
+            int t = typeProp.enumValueIndex;
 
             float line = EditorGUIUtility.singleLineHeight;
-            float sp = EditorGUIUtility.standardVerticalSpacing;
-            float pad = 4f;
-            float stripW = 4f;
+            float sp = 4f;        // 行間（詰まり過ぎ対策で広め）
+            float padTop = 5f;
+            float padBottom = 7f;
+            float stripW = 3f;
+            float gap = 16f;      // カラーラインと内容の間隔（三角との被り対策）
 
-            float y = rect.y + pad;
-            float x = rect.x + stripW + 6f;
-            float w = rect.width - stripW - 10f;
+            float y = rect.y + padTop;
+            float x = rect.x + stripW + gap;
+            float w = rect.width - stripW - gap - 6f;
 
             if (draw)
             {
                 var strip = new Rect(rect.x, rect.y + 1f, stripW, rect.height - 2f);
-                EditorGUI.DrawRect(strip, TypeColor(typeProp.enumValueIndex));
+                EditorGUI.DrawRect(strip, TypeColor(t));
             }
 
             Rect Row(float h)
@@ -125,6 +133,30 @@ namespace MudShip.MotionRecorder.Editor
                 y += h + sp;
                 return r;
             }
+
+            // ヘッダ行: 折りたたみ三角 ＋ 名前(編集可) ＋ 種別バッジ
+            {
+                var r = Row(line);
+                if (draw)
+                {
+                    var foldR = new Rect(r.x, r.y, 14f, r.height);
+                    el.isExpanded = EditorGUI.Foldout(foldR, el.isExpanded, GUIContent.none, true);
+
+                    const float badgeW = 74f;
+                    var nameR = new Rect(r.x + 16f, r.y, r.width - 16f - badgeW - 4f, r.height);
+                    EditorGUI.PropertyField(nameR, labelProp, GUIContent.none);
+
+                    var badgeR = new Rect(r.xMax - badgeW, r.y, badgeW, r.height);
+                    var prevC = GUI.color;
+                    GUI.color = TypeColor(t);
+                    EditorGUI.LabelField(badgeR, typeProp.enumDisplayNames[t], BadgeStyle);
+                    GUI.color = prevC;
+                }
+            }
+
+            // 折りたたみ時はヘッダだけ
+            if (!el.isExpanded)
+                return (y - rect.y) + padBottom - sp;
 
             void Prop(string name)
             {
@@ -140,7 +172,7 @@ namespace MudShip.MotionRecorder.Editor
                 if (draw) EditorGUI.PropertyField(r, typeProp, new GUIContent("Type"));
             }
 
-            // Output Directory + 参照ボタン
+            // Output Directory + 参照
             {
                 var r = Row(line);
                 if (draw)
@@ -154,10 +186,8 @@ namespace MudShip.MotionRecorder.Editor
                 }
             }
 
-            // Settings
             Prop("settings");
 
-            int t = typeProp.enumValueIndex;
             if (t == (int)MS_Recorder.RecorderType.Character)
             {
                 Prop("animator");
@@ -182,7 +212,7 @@ namespace MudShip.MotionRecorder.Editor
                 Prop("audioSampleRate");
             }
 
-            return (y - rect.y) + pad - sp;
+            return (y - rect.y) + padBottom - sp;
         }
 
         static Color TypeColor(int type) => type switch
@@ -215,6 +245,7 @@ namespace MudShip.MotionRecorder.Editor
 
             var added = _slots.GetArrayElementAtIndex(idx);
             added.isExpanded = true;
+            added.FindPropertyRelative("label").stringValue = "";
             added.FindPropertyRelative("type").enumValueIndex = (int)MS_Recorder.RecorderType.Character;
             added.FindPropertyRelative("space").enumValueIndex = (int)MS_Recorder.RecordSpace.World;
             added.FindPropertyRelative("outputDirectory").stringValue = "";

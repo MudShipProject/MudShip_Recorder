@@ -40,7 +40,10 @@ namespace MudShip.MotionRecorder
         [Serializable]
         public class Slot
         {
-            [Tooltip("記録の種別。Character はモーション＋表情。Camera / Transform は未実装（枠のみ）。")]
+            [Tooltip("インスペクタ表示用の名前（任意）。スロットの識別用で、ファイル名には影響しない。")]
+            public string label = "";
+
+            [Tooltip("記録の種別。Character はモーション＋表情。")]
             public RecorderType type = RecorderType.Character;
 
             [Tooltip("出力先フォルダ。空なら persistentDataPath/MudShipRecordings を使う。")]
