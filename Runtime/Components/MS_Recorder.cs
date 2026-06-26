@@ -25,6 +25,13 @@ namespace MudShip.MotionRecorder
             Transform,
         }
 
+        /// <summary>Transform / Camera の記録空間。</summary>
+        public enum RecordSpace
+        {
+            World,
+            Local,
+        }
+
         /// <summary>
         /// 録画対象 1 件分のスロット。種別・出力先・Settings・シーン配線をすべてここに持つ
         /// （ScriptableObject は使わず、シーンに直接保存する）。type に応じて使うフィールドが変わる。
@@ -52,11 +59,14 @@ namespace MudShip.MotionRecorder
             [Tooltip("表情を記録する SkinnedMeshRenderer 群（各 SMR の全 BlendShape を記録）。\nAnimator の GameObject 配下にあること。空なら表情は記録しない。")]
             public List<SkinnedMeshRenderer> faceRenderers = new List<SkinnedMeshRenderer>();
 
-            [Tooltip("[Transform タイプ] 記録対象の Transform。localPosition / localRotation / localScale を記録する。")]
+            [Tooltip("[Transform タイプ] 記録対象の Transform。Pos / Rot / Scale を記録する。")]
             public Transform transformTarget;
 
             [Tooltip("[Camera タイプ] 記録対象の Camera。Transform に加えて fieldOfView も記録する。")]
             public Camera cameraTarget;
+
+            [Tooltip("[Transform / Camera] 記録する空間。\nWorld = 親の影響込みのワールド値（position/rotation/lossyScale）。リグ/ドリーの下のカメラはこちら。\nLocal = 親基準のローカル値（localPosition 等）。")]
+            public RecordSpace space = RecordSpace.World;
 
             /// <summary>実際の出力先フォルダを解決する。</summary>
             public string ResolveOutputDirectory()
@@ -180,7 +190,7 @@ namespace MudShip.MotionRecorder
             string dir = slot.ResolveOutputDirectory();
             string fileBase = UniqueName($"{MakeSafeFileName(target.gameObject.name)}_{stamp}", usedNames);
 
-            var session = new TransformRecorderSession(target, slot.settings);
+            var session = new TransformRecorderSession(target, slot.settings, slot.space == RecordSpace.World);
             session.Start(Path.Combine(dir, fileBase + MsrtFormat.Extension));
             _sessions.Add(session);
         }
@@ -197,7 +207,7 @@ namespace MudShip.MotionRecorder
             string dir = slot.ResolveOutputDirectory();
             string fileBase = UniqueName($"{MakeSafeFileName(cam.gameObject.name)}_{stamp}", usedNames);
 
-            var session = new CameraRecorderSession(cam, slot.settings);
+            var session = new CameraRecorderSession(cam, slot.settings, slot.space == RecordSpace.World);
             session.Start(Path.Combine(dir, fileBase + MsrcFormat.Extension));
             _sessions.Add(session);
         }

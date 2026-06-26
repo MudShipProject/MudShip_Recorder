@@ -28,8 +28,11 @@ Transform / DMX など他ストリームの記録にも拡張予定。
   - `Hip Bone` … `localPosition` を記録する腰ボーン（空なら Humanoid の Hips を自動採用）
   - `Add Bones` … 腰に加えて位置も記録する追加ボーン（ツイスト等。回転は全ボーンで記録）
   - `Face Renderers` … 表情を記録する `SkinnedMeshRenderer` 群（**Animator の GameObject 配下**にあること）
-- **`Transform`**：`Transform Target` の `localPosition / localRotation / localScale` を記録（`.msrt`）。
+- **`Transform`**：`Transform Target` の Pos / Rot / Scale を記録（`.msrt`）。
 - **`Camera`**：`Camera Target` の Transform（Pos/Rot/Scale）＋ `fieldOfView` を記録（`.msrc`）。
+- Transform / Camera は **`Record Space`** で記録空間を選択：
+  - `World`（既定）… `position` / `rotation` / `lossyScale`。**親（リグ/ドリー）の下にあるカメラ等はこちら**。`.anim` は親なしオブジェクトに適用する前提。
+  - `Local` … `localPosition` / `localRotation` / `localScale`。同じ親構造に適用する用途向け。
 
 ## 使い方（コンポーネント）
 

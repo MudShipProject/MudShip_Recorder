@@ -33,6 +33,9 @@ namespace MudShip.MotionRecorder
         /// <summary>各フレームに timestamp(double) を持つことを示すフラグ。</summary>
         public const uint FlagHasTimestamp = 1u << 0;
 
+        /// <summary>値がワールド空間 (position/rotation/lossyScale) であることを示すフラグ。立っていなければローカル。</summary>
+        public const uint FlagWorldSpace = 1u << 1;
+
         /// <summary>推奨ファイル拡張子。</summary>
         public const string Extension = ".msrc";
 

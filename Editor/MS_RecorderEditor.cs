@@ -163,12 +163,14 @@ namespace MudShip.MotionRecorder.Editor
                     EditorGUILayout.Space(4);
                     EditorGUILayout.LabelField("Transform（Pos / Rot / Scale）", EditorStyles.miniBoldLabel);
                     EditorGUILayout.PropertyField(slot.FindPropertyRelative("transformTarget"), new GUIContent("Transform Target"));
+                    EditorGUILayout.PropertyField(slot.FindPropertyRelative("space"), new GUIContent("Record Space"));
                 }
                 else if (typeIndex == (int)MS_Recorder.RecorderType.Camera)
                 {
                     EditorGUILayout.Space(4);
                     EditorGUILayout.LabelField("Camera（Pos / Rot / Scale / FOV）", EditorStyles.miniBoldLabel);
                     EditorGUILayout.PropertyField(slot.FindPropertyRelative("cameraTarget"), new GUIContent("Camera Target"));
+                    EditorGUILayout.PropertyField(slot.FindPropertyRelative("space"), new GUIContent("Record Space"));
                 }
 
                 EditorGUI.indentLevel--;
@@ -198,6 +200,7 @@ namespace MudShip.MotionRecorder.Editor
             var added = _slots.GetArrayElementAtIndex(idx);
             added.isExpanded = true;
             added.FindPropertyRelative("type").enumValueIndex = (int)MS_Recorder.RecorderType.Character;
+            added.FindPropertyRelative("space").enumValueIndex = (int)MS_Recorder.RecordSpace.World;
             added.FindPropertyRelative("outputDirectory").stringValue = "";
 
             var st = added.FindPropertyRelative("settings");

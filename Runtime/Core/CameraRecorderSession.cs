@@ -13,6 +13,7 @@ namespace MudShip.MotionRecorder
         readonly RecorderSettings _settings;
         readonly Camera _camera;
         readonly Transform _target;
+        readonly bool _worldSpace;
         ChunkedStreamWriter _writer;
 
         /// <summary>記録対象の Camera。</summary>
@@ -24,11 +25,13 @@ namespace MudShip.MotionRecorder
         public bool Faulted => _writer?.Faulted ?? false;
         public Exception FaultException => _writer?.FaultException;
 
-        public CameraRecorderSession(Camera camera, RecorderSettings settings)
+        /// <param name="worldSpace">true: position/rotation/lossyScale (ワールド) を記録。false: ローカル。Fov は常に記録。</param>
+        public CameraRecorderSession(Camera camera, RecorderSettings settings, bool worldSpace)
         {
             _camera = camera != null ? camera : throw new ArgumentNullException(nameof(camera));
             _target = camera.transform;
             _settings = settings;
+            _worldSpace = worldSpace;
         }
 
         public void Start(string filePath)
@@ -37,7 +40,7 @@ namespace MudShip.MotionRecorder
                 throw new InvalidOperationException("Session is already recording.");
 
             var settings = _settings.Normalized();
-            byte[] header = BuildHeader(settings.NominalFps, out long frameCountPos);
+            byte[] header = BuildHeader(settings.NominalFps, _worldSpace, out long frameCountPos);
             _writer = new ChunkedStreamWriter(filePath, header, frameCountPos, MsrcFormat.ComputeStride(), settings);
             FilePath = filePath;
             IsRecording = true;
@@ -59,18 +62,27 @@ namespace MudShip.MotionRecorder
             int o = 0;
             BinaryLE.WriteF64(span.Slice(o), timestamp); o += 8;
 
-            Vector3 p = _target.localPosition;
+            Vector3 p; Quaternion q; Vector3 s;
+            if (_worldSpace)
+            {
+                p = _target.position;
+                q = _target.rotation;
+                s = _target.lossyScale;
+            }
+            else
+            {
+                p = _target.localPosition;
+                q = _target.localRotation;
+                s = _target.localScale;
+            }
+
             BinaryLE.WriteF32(span.Slice(o), p.x); o += 4;
             BinaryLE.WriteF32(span.Slice(o), p.y); o += 4;
             BinaryLE.WriteF32(span.Slice(o), p.z); o += 4;
-
-            Quaternion q = _target.localRotation;
             BinaryLE.WriteF32(span.Slice(o), q.x); o += 4;
             BinaryLE.WriteF32(span.Slice(o), q.y); o += 4;
             BinaryLE.WriteF32(span.Slice(o), q.z); o += 4;
             BinaryLE.WriteF32(span.Slice(o), q.w); o += 4;
-
-            Vector3 s = _target.localScale;
             BinaryLE.WriteF32(span.Slice(o), s.x); o += 4;
             BinaryLE.WriteF32(span.Slice(o), s.y); o += 4;
             BinaryLE.WriteF32(span.Slice(o), s.z); o += 4;
@@ -97,12 +109,13 @@ namespace MudShip.MotionRecorder
             finally { _writer?.Dispose(); _writer = null; }
         }
 
-        static byte[] BuildHeader(float nominalFps, out long frameCountPos)
+        static byte[] BuildHeader(float nominalFps, bool worldSpace, out long frameCountPos)
         {
+            uint flags = MsrcFormat.FlagHasTimestamp | (worldSpace ? MsrcFormat.FlagWorldSpace : 0u);
             var b = new List<byte>(32);
             BinaryLE.Bytes(b, MsrcFormat.Magic);
             BinaryLE.U16(b, MsrcFormat.Version);
-            BinaryLE.U32(b, MsrcFormat.FlagHasTimestamp);
+            BinaryLE.U32(b, flags);
             BinaryLE.F32(b, nominalFps);
             frameCountPos = b.Count;
             BinaryLE.U32(b, 0); // frameCount プレースホルダ

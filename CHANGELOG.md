@@ -15,6 +15,8 @@ All notable changes to this package will be documented in this file.
   指定 `SkinnedMeshRenderer` 群の全 BlendShape ウェイトを GC フリーで記録。
 - **Transform 記録**：`MsrtFormat`（`.msrt`）/ `TransformRecorderSession`。対象 Transform の Pos/Rot/Scale。
 - **Camera 記録**：`MsrcFormat`（`.msrc`）/ `CameraRecorderSession`。Transform に加えて `fieldOfView`。
+- Transform / Camera に **`Record Space`（World / Local）** を追加。World は `position/rotation/lossyScale` を記録し、
+  親（リグ/ドリー）の下のカメラでもワールドの動きを取りこぼさない（既定 World）。形式に `FlagWorldSpace` を追加。
 - `IRecorderSession`：全セッション共通インターフェイス。`MS_Recorder` は種別を問わず統一して駆動する。
 - `ChunkedStreamWriter`：形式非依存の汎用チャンクライタ（旧 `MsrcStreamWriter` を抽出・共通化）。
 - `.msrf`/`.msrt`/`.msrc → .anim` 変換（表情は `blendShape.<名前>`、Transform/Camera は対象自身の TRS、Camera は `field of view` も）。
