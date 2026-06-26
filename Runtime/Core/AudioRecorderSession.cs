@@ -45,6 +45,9 @@ namespace MudShip.MotionRecorder
         /// <summary>記録中に観測した最大振幅（0..1）。入力レベル確認用。</summary>
         public float Peak => _peak;
 
+        /// <summary>実サンプルレート(Hz)（Start 後に有効）。</summary>
+        public int SampleRate => _sampleRate;
+
         public AudioRecorderSession(string device, int sampleRate, RecorderSettings settings)
         {
             _requestedDevice = device;

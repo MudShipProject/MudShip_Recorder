@@ -287,8 +287,20 @@ namespace MudShip.MotionRecorder.Editor
                     // ファイル名の拡張子（.msrm/.msrf/.msrt/.msrc/.msra）が種別を表す。
                     string file = string.IsNullOrEmpty(s.FilePath) ? "-" : Path.GetFileName(s.FilePath);
                     string state = s.Faulted ? "  (エラー)" : "";
-                    string extra = s is AudioRecorderSession a ? $", peak {a.Peak:F3}" : "";
-                    EditorGUILayout.LabelField(file, $"{s.FrameCount} frames{extra}{state}");
+
+                    string detail;
+                    if (s is AudioRecorderSession a)
+                    {
+                        // 音声は frames がサンプル数で桁違いになるため「秒@Hz」で表示。
+                        float secs = a.SampleRate > 0 ? a.FrameCount / (float)a.SampleRate : 0f;
+                        detail = $"{secs:F1}s @{a.SampleRate}Hz, peak {a.Peak:F3}";
+                    }
+                    else
+                    {
+                        detail = $"{s.FrameCount} frames";
+                    }
+
+                    EditorGUILayout.LabelField(file, detail + state);
                 }
             }
         }
