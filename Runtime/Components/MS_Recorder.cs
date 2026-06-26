@@ -57,7 +57,7 @@ namespace MudShip.MotionRecorder
             [Tooltip("localPosition を記録する腰ボーン。\n空なら Humanoid の Hips を自動採用。Generic 等はここに腰ボーンを明示指定する。")]
             public Transform hipBone;
 
-            [Tooltip("腰に加えて localPosition も記録する追加ボーン（ツイストボーン等）。回転は全ボーンで記録される。")]
+            [Tooltip("ヒューマノイド定義に含まれないが回転を記録したい追加ボーン（ツイストボーン等）。\nヒューマノイドボーン＋ここで指定したボーンの localRotation を記録する。位置は Hip のみ。")]
             public List<Transform> addBones = new List<Transform>();
 
             [Tooltip("表情を記録する SkinnedMeshRenderer 群（各 SMR の全 BlendShape を記録）。\nAnimator の GameObject 配下にあること。空なら表情は記録しない。")]
@@ -313,25 +313,23 @@ namespace MudShip.MotionRecorder
             _sessions.Clear();
         }
 
-        /// <summary>位置記録ボーンの解決結果を検査し、取りこぼし・未指定を警告する。</summary>
+        /// <summary>解決したスケルトンを検査し、記録対象なし・腰未解決を警告する。</summary>
         void WarnPositionBones(Animator animator, Slot slot, SkeletonDefinition skeleton)
         {
-            int requested = slot.hipBone != null ? 1 : 0;
-            if (slot.addBones != null)
-                foreach (var t in slot.addBones)
-                    if (t != null) requested++;
-
-            int recorded = skeleton.PositionBoneIndices.Length;
-
-            if (requested > 0 && recorded < requested)
+            if (skeleton.Bones.Length == 0)
+            {
                 Debug.LogWarning(
-                    $"[MS_Recorder] '{animator.name}': 指定した位置記録ボーンの一部が Animator の階層外のため除外されました ({recorded}/{requested})。",
+                    $"[MS_Recorder] '{animator.name}': 記録対象ボーンが 0 本です。" +
+                    "ヒューマノイドの Avatar が未設定か、Generic で Add Bones も未指定の可能性があります。" +
+                    "Generic の場合はスロットの Add Bones に記録したいボーンを指定してください。",
                     this);
+                return;
+            }
 
-            if (recorded == 0)
+            if (skeleton.PositionBoneIndices.Length == 0)
                 Debug.LogWarning(
-                    $"[MS_Recorder] '{animator.name}': localPosition を記録するボーンがありません (回転のみ記録)。" +
-                    "Humanoid 以外、または腰を記録したい場合はスロットの Hip Bone に腰ボーンを指定してください。",
+                    $"[MS_Recorder] '{animator.name}': localPosition を記録する腰ボーンがありません（回転のみ記録）。" +
+                    "Humanoid 以外、または腰位置を記録したい場合はスロットの Hip Bone に腰ボーンを指定してください。",
                     this);
         }
 

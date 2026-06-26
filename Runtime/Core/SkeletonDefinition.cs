@@ -76,45 +76,81 @@ namespace MudShip.MotionRecorder
             => FromAnimator(animator, null, null);
 
         /// <summary>
-        /// Animator からスケルトン定義を構築する。root は Animator の Transform。
-        /// localRotation は root 配下の全ボーンで記録される。localPosition を記録するボーンは次の順で集める:
+        /// Animator からヒューマノイド前提でスケルトン定義を構築する。root は Animator の Transform。
+        /// 記録対象（localRotation）は次の合算（重複・root 配下外は除外、決定的順）:
         /// <list type="number">
-        /// <item><b>腰</b>: <paramref name="hipBone"/> があればそれ。無指定かつ Humanoid なら Hips を自動採用。
-        /// 非 Humanoid で無指定なら腰は記録しない (root ボーンを勝手に拾うことはしない)。</item>
-        /// <item><b>追加</b>: <paramref name="addBones"/> (ツイストボーン等、腰以外で位置も要るもの。
-        /// これらは元々 localRotation が記録されており、加えて localPosition も記録される)。</item>
+        /// <item><b>ヒューマノイド定義ボーン</b>: Avatar から <see cref="Animator.GetBoneTransform"/> で取得
+        /// （マップ済みのもののみ、<see cref="HumanBodyBones"/> の列挙順）。</item>
+        /// <item><b>追加ボーン</b>: <paramref name="addBones"/>（ツイスト等、ヒューマノイド外で回転を記録したいもの）。</item>
         /// </list>
-        /// root 配下に無いボーンは <see cref="FromHierarchy"/> 側で除外される。重複は除く。
+        /// localPosition は<b>腰のみ</b>記録する（<paramref name="hipBone"/>。無指定かつ Humanoid なら Hips を自動）。
+        /// 髪・スカート等まで含めて階層全ボーンを録りたい場合は <see cref="FromHierarchy"/> を使うこと
+        /// （こちらはヒューマノイドにマップされたボーン＋明示追加のみ＝記録数を絞って毎フレームの読み出しを抑える）。
+        /// Generic（非ヒューマノイド）では自動収集できないため、<paramref name="hipBone"/> と
+        /// <paramref name="addBones"/> に指定されたボーンのみ記録する。
         /// </summary>
-        /// <param name="animator">記録対象。Transform 以下を全走査して回転を記録する。</param>
+        /// <param name="animator">記録対象。ヒューマノイド前提。</param>
         /// <param name="hipBone">localPosition を記録する腰ボーン。null なら Humanoid の Hips を自動。</param>
-        /// <param name="addBones">腰に加えて localPosition も記録する追加ボーン群 (任意)。</param>
+        /// <param name="addBones">ヒューマノイド外で回転を記録する追加ボーン（ツイスト等、任意）。</param>
         public static SkeletonDefinition FromAnimator(
             Animator animator, Transform hipBone, IReadOnlyList<Transform> addBones)
         {
             if (animator == null)
                 throw new System.ArgumentNullException(nameof(animator));
 
-            var posBones = new List<Transform>(4);
+            Transform root = animator.transform;
+            var bones = new List<Transform>(64);
             var seen = new HashSet<Transform>();
 
-            // 1) 腰: 明示指定 → 無ければ Humanoid の Hips を自動採用。
-            //    非 Humanoid で無指定なら腰は記録しない (意味のない root 定数データを避ける)。
-            Transform hip = hipBone;
-            if (hip == null && animator.isHuman)
-                hip = animator.GetBoneTransform(HumanBodyBones.Hips);
-            if (hip != null && seen.Add(hip))
-                posBones.Add(hip);
+            // 1) ヒューマノイド定義ボーン（Avatar から取得、enum 順で決定的）。マップ済みのみ採用。
+            if (animator.isHuman)
+            {
+                for (int i = 0; i < (int)HumanBodyBones.LastBone; i++)
+                {
+                    Transform t = animator.GetBoneTransform((HumanBodyBones)i);
+                    if (t != null && IsUnder(root, t) && seen.Add(t))
+                        bones.Add(t);
+                }
+            }
 
-            // 2) 追加で位置も記録するボーン (ツイストボーン等)。回転は全ボーン共通で既に記録される。
+            // 2) 追加ボーン（ツイスト等、ヒューマノイド外）。回転を記録する。
             if (addBones != null)
             {
                 foreach (var t in addBones)
-                    if (t != null && seen.Add(t))
-                        posBones.Add(t);
+                    if (t != null && IsUnder(root, t) && seen.Add(t))
+                        bones.Add(t);
             }
 
-            return FromHierarchy(animator.transform, posBones);
+            // 3) 腰: 明示指定 → 無ければ Humanoid の Hips。localPosition の記録対象（回転集合にも含める）。
+            Transform hip = hipBone;
+            if (hip == null && animator.isHuman)
+                hip = animator.GetBoneTransform(HumanBodyBones.Hips);
+            if (hip != null && IsUnder(root, hip) && seen.Add(hip))
+                bones.Add(hip); // 通常はヒューマノイド側で既に含まれる
+
+            var paths = new string[bones.Count];
+            for (int i = 0; i < bones.Count; i++)
+                paths[i] = BuildRelativePath(root, bones[i]);
+
+            // 位置記録は腰のみ。
+            var posIdx = new List<int>(1);
+            if (hip != null)
+            {
+                int idx = bones.IndexOf(hip);
+                if (idx >= 0)
+                    posIdx.Add(idx);
+            }
+
+            return new SkeletonDefinition(root, bones.ToArray(), paths, posIdx.ToArray());
+        }
+
+        /// <summary><paramref name="t"/> が <paramref name="root"/> 自身またはその子孫かを判定する。</summary>
+        static bool IsUnder(Transform root, Transform t)
+        {
+            for (Transform c = t; c != null; c = c.parent)
+                if (c == root)
+                    return true;
+            return false;
         }
 
         static void Collect(Transform root, Transform node, List<Transform> bones, List<string> paths)
