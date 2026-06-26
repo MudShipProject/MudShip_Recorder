@@ -18,8 +18,23 @@ namespace MudShip.MotionRecorder
     [DisallowMultipleComponent]
     public class MotionRecorderBehaviour : MonoBehaviour
     {
-        [Tooltip("記録対象の Animator 一覧。各 Animator の Transform 以下を全走査して記録する。")]
-        [SerializeField] List<Animator> _targets = new List<Animator>();
+        /// <summary>
+        /// 記録対象 1 件分の設定。Animator と、その localPosition も記録するボーン (通常は腰) のペア。
+        /// </summary>
+        [Serializable]
+        public class Target
+        {
+            [Tooltip("記録対象の Animator。Transform 以下を全走査して localRotation を記録する。")]
+            public Animator animator;
+
+            [Tooltip("localPosition も記録するボーン (通常は腰/Hips)。\n" +
+                     "空の場合: Humanoid なら Hips を自動採用。Humanoid 以外では位置を記録せず警告 (回転のみ)。\n" +
+                     "Generic リグや腰以外を狙いたい場合はここに対象 Transform を明示指定する。")]
+            public List<Transform> positionBones = new List<Transform>();
+        }
+
+        [Tooltip("記録対象一覧。各 Animator の Transform 以下を全走査して記録する。")]
+        [SerializeField] List<Target> _targets = new List<Target>();
 
         [Tooltip("出力先フォルダ。空なら persistentDataPath/MotionRecordings を使う。")]
         [SerializeField] string _outputDirectory = "";
@@ -32,8 +47,8 @@ namespace MudShip.MotionRecorder
         readonly List<MotionRecorderSession> _sessions = new List<MotionRecorderSession>();
         double _startTime;
 
-        /// <summary>記録対象 Animator 一覧 (実行時に編集可能)。</summary>
-        public IList<Animator> Targets => _targets;
+        /// <summary>記録対象一覧 (実行時に編集可能)。各要素は Animator＋位置記録ボーンのペア。</summary>
+        public IList<Target> Targets => _targets;
 
         /// <summary>記録中か。</summary>
         public bool IsRecording { get; private set; }
@@ -64,14 +79,17 @@ namespace MudShip.MotionRecorder
             string dir = ResolveOutputDirectory();
             string stamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
 
-            foreach (var animator in _targets)
+            foreach (var entry in _targets)
             {
+                var animator = entry?.animator;
                 if (animator == null)
                     continue;
 
                 try
                 {
-                    var skeleton = SkeletonDefinition.FromAnimator(animator, _includeRoot);
+                    var skeleton = SkeletonDefinition.FromAnimator(animator, entry.positionBones, _includeRoot);
+                    WarnPositionBones(animator, entry, skeleton);
+
                     var session = new MotionRecorderSession(skeleton, _settings);
                     string fileName = $"{MakeSafeFileName(animator.gameObject.name)}_{stamp}{MsrcFormat.Extension}";
                     session.Start(Path.Combine(dir, fileName));
@@ -165,6 +183,28 @@ namespace MudShip.MotionRecorder
                 catch (Exception e) { Debug.LogException(e, this); }
             }
             _sessions.Clear();
+        }
+
+        /// <summary>位置記録ボーンの解決結果を検査し、取りこぼし・未指定を警告する。</summary>
+        void WarnPositionBones(Animator animator, Target entry, SkeletonDefinition skeleton)
+        {
+            int requested = 0;
+            if (entry.positionBones != null)
+                foreach (var t in entry.positionBones)
+                    if (t != null) requested++;
+
+            int recorded = skeleton.PositionBoneIndices.Length;
+
+            if (requested > 0 && recorded < requested)
+                Debug.LogWarning(
+                    $"[MotionRecorder] '{animator.name}': 指定された位置記録ボーンの一部が Animator の階層外のため除外されました ({recorded}/{requested})。",
+                    this);
+
+            if (recorded == 0)
+                Debug.LogWarning(
+                    $"[MotionRecorder] '{animator.name}': localPosition を記録するボーンがありません (回転のみ記録)。" +
+                    "Humanoid 以外、または腰を記録したい場合は対象の Position Bones に腰ボーンを指定してください。",
+                    this);
         }
 
         static string MakeSafeFileName(string name)

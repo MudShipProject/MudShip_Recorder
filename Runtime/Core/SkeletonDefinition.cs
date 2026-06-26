@@ -68,29 +68,54 @@ namespace MudShip.MotionRecorder
 
         /// <summary>
         /// Animator からスケルトン定義を構築する。root は Animator の Transform。
-        /// Humanoid なら Hips の localPosition を、それ以外なら走査先頭ボーンの localPosition を記録する。
+        /// 位置記録ボーンは <see cref="FromAnimator(Animator, IReadOnlyList{Transform}, bool)"/> に委譲し、
+        /// 明示指定が無ければ Humanoid の Hips を自動採用する。
         /// </summary>
         public static SkeletonDefinition FromAnimator(Animator animator, bool includeRoot = false)
+            => FromAnimator(animator, null, includeRoot);
+
+        /// <summary>
+        /// Animator からスケルトン定義を構築する。root は Animator の Transform。
+        /// localPosition を記録するボーンは次の優先順で決まる:
+        /// <list type="number">
+        /// <item><paramref name="positionBones"/> に明示指定があればそれ (root 配下のもののみ採用)。</item>
+        /// <item>無指定かつ Humanoid なら Hips を自動採用 (アバターマッピングなので確実)。</item>
+        /// <item>いずれも該当しなければ位置記録なし (回転のみ)。root ボーンを勝手に拾うことはしない。</item>
+        /// </list>
+        /// </summary>
+        /// <param name="animator">記録対象。Transform 以下を全走査して回転を記録する。</param>
+        /// <param name="positionBones">localPosition も記録するボーン群 (通常は腰)。null/空なら上記の自動解決。</param>
+        /// <param name="includeRoot">root 自身もボーンに含めるか (既定 false)。</param>
+        public static SkeletonDefinition FromAnimator(
+            Animator animator, IReadOnlyList<Transform> positionBones, bool includeRoot = false)
         {
             if (animator == null)
                 throw new System.ArgumentNullException(nameof(animator));
 
-            var posBones = new List<Transform>(1);
-            if (animator.isHuman)
+            var posBones = new List<Transform>(2);
+            bool hasExplicit = false;
+            if (positionBones != null)
+            {
+                foreach (var t in positionBones)
+                {
+                    if (t != null)
+                    {
+                        posBones.Add(t);
+                        hasExplicit = true;
+                    }
+                }
+            }
+
+            // 明示指定が無ければ Humanoid の Hips を自動採用。非 Humanoid では位置記録なし
+            // (root ボーンを勝手に拾うと意味のない定数データになるため、あえて拾わない)。
+            if (!hasExplicit && animator.isHuman)
             {
                 var hips = animator.GetBoneTransform(HumanBodyBones.Hips);
                 if (hips != null)
                     posBones.Add(hips);
             }
 
-            var def = FromHierarchy(animator.transform, posBones, includeRoot);
-
-            // 非ヒューマノイド等で位置記録ボーンが取れなかった場合、走査先頭ボーンを位置記録に充てる
-            // (全体の移動成分を取りこぼさないため)。
-            if (def.PositionBoneIndices.Length == 0 && def.Bones.Length > 0)
-                def.PositionBoneIndices = new[] { 0 };
-
-            return def;
+            return FromHierarchy(animator.transform, posBones, includeRoot);
         }
 
         static void Collect(Transform root, Transform node, bool includeRoot,
