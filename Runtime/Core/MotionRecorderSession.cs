@@ -1,9 +1,11 @@
 using System;
+using System.Collections.Generic;
+using UnityEngine;
 
 namespace MudShip.MotionRecorder
 {
     /// <summary>
-    /// 1 スケルトンを 1 つの .msrc ファイルへ記録するセッション。MonoBehaviour に依存しないので
+    /// 1 スケルトンを 1 つの .msrm ファイルへ記録するセッション。MonoBehaviour に依存しないので
     /// 任意のクラスから直接生成・駆動できる。毎フレーム <see cref="CaptureFrame"/> を
     /// 呼ぶ側 (通常は LateUpdate) が timestamp を渡す。
     /// </summary>
@@ -22,12 +24,12 @@ namespace MudShip.MotionRecorder
     public sealed class MotionRecorderSession : IDisposable
     {
         readonly RecorderSettings _settings;
-        MsrcStreamWriter _writer;
+        ChunkedStreamWriter _writer;
 
         /// <summary>記録対象のスケルトン定義。</summary>
         public SkeletonDefinition Skeleton { get; }
 
-        /// <summary>出力先 .msrc パス (Start 後に有効)。</summary>
+        /// <summary>出力先 .msrm パス (Start 後に有効)。</summary>
         public string FilePath { get; private set; }
 
         /// <summary>記録中か。</summary>
@@ -54,7 +56,11 @@ namespace MudShip.MotionRecorder
             if (IsRecording)
                 throw new InvalidOperationException("Session is already recording.");
 
-            _writer = new MsrcStreamWriter(filePath, Skeleton, _settings);
+            var settings = _settings.Normalized();
+            byte[] header = BuildHeader(Skeleton, settings.NominalFps, out long frameCountPos);
+            int stride = MsrmFormat.ComputeStride(Skeleton.Bones.Length, Skeleton.PositionBoneIndices.Length);
+
+            _writer = new ChunkedStreamWriter(filePath, header, frameCountPos, stride, settings);
             FilePath = filePath;
             IsRecording = true;
         }
@@ -66,7 +72,38 @@ namespace MudShip.MotionRecorder
             if (!IsRecording)
                 return;
 
-            _writer.WriteFrame(timestamp, Skeleton);
+            Span<byte> span = _writer.BeginFrame();
+            if (span.IsEmpty)
+            {
+                if (_writer.Faulted)
+                    Stop();
+                return;
+            }
+
+            int o = 0;
+            BinaryLE.WriteF64(span.Slice(o), timestamp); o += 8;
+
+            var bones = Skeleton.Bones;
+            var posIdx = Skeleton.PositionBoneIndices;
+
+            for (int i = 0; i < posIdx.Length; i++)
+            {
+                Vector3 p = bones[posIdx[i]].localPosition;
+                BinaryLE.WriteF32(span.Slice(o), p.x); o += 4;
+                BinaryLE.WriteF32(span.Slice(o), p.y); o += 4;
+                BinaryLE.WriteF32(span.Slice(o), p.z); o += 4;
+            }
+
+            for (int i = 0; i < bones.Length; i++)
+            {
+                Quaternion q = bones[i].localRotation;
+                BinaryLE.WriteF32(span.Slice(o), q.x); o += 4;
+                BinaryLE.WriteF32(span.Slice(o), q.y); o += 4;
+                BinaryLE.WriteF32(span.Slice(o), q.z); o += 4;
+                BinaryLE.WriteF32(span.Slice(o), q.w); o += 4;
+            }
+
+            _writer.CommitFrame();
 
             if (_writer.Faulted)
                 Stop();
@@ -93,6 +130,30 @@ namespace MudShip.MotionRecorder
                 _writer?.Dispose();
                 _writer = null;
             }
+        }
+
+        static byte[] BuildHeader(SkeletonDefinition skel, float nominalFps, out long frameCountPos)
+        {
+            var b = new List<byte>(256);
+            BinaryLE.Bytes(b, MsrmFormat.Magic);
+            BinaryLE.U16(b, MsrmFormat.Version);
+            BinaryLE.U32(b, MsrmFormat.FlagHasTimestamp);
+            BinaryLE.F32(b, nominalFps);
+            BinaryLE.U16(b, (ushort)skel.Bones.Length);
+            BinaryLE.U16(b, (ushort)skel.PositionBoneIndices.Length);
+
+            frameCountPos = b.Count;
+            BinaryLE.U32(b, 0); // frameCount プレースホルダ (Finish で確定)
+
+            var posIdx = skel.PositionBoneIndices;
+            for (int i = 0; i < posIdx.Length; i++)
+                BinaryLE.U16(b, (ushort)posIdx[i]);
+
+            var paths = skel.Paths;
+            for (int i = 0; i < paths.Length; i++)
+                BinaryLE.StringU16(b, paths[i], MsrmFormat.PathEncoding);
+
+            return b.ToArray();
         }
     }
 }

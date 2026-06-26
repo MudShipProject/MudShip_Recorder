@@ -3,13 +3,13 @@ using System.Text;
 namespace MudShip.MotionRecorder
 {
     /// <summary>
-    /// .msrc (MudShip ReCording) バイナリフォーマットの定数と仕様。
-    /// ランタイムが書き出す唯一の形式であり、記録の「正本」。
+    /// .msrm (MudShip Recording - Motion) バイナリフォーマットの定数と仕様。
+    /// スケルトンの localRotation / 一部ボーンの localPosition を記録する正本形式。
     ///
     /// レイアウト (リトルエンディアン):
     /// <code>
     /// [Header]
-    ///   magic        char[4]  "MSRC"
+    ///   magic        char[4]  "MSRM"
     ///   version      uint16
     ///   flags        uint32   bit0: hasTimestamp
     ///   nominalFps   float32  公称フレームレート (実時刻は各frameのtimestampが正)
@@ -27,10 +27,10 @@ namespace MudShip.MotionRecorder
     /// </code>
     /// stride = 8 + posBoneCount*12 + boneCount*16 バイト。
     /// </summary>
-    public static class MsrcFormat
+    public static class MsrmFormat
     {
-        /// <summary>マジックバイト "MSRC"。</summary>
-        public static readonly byte[] Magic = { (byte)'M', (byte)'S', (byte)'R', (byte)'C' };
+        /// <summary>マジックバイト "MSRM"。</summary>
+        public static readonly byte[] Magic = { (byte)'M', (byte)'S', (byte)'R', (byte)'M' };
 
         /// <summary>現在のフォーマットバージョン。</summary>
         public const ushort Version = 1;
@@ -39,7 +39,7 @@ namespace MudShip.MotionRecorder
         public const uint FlagHasTimestamp = 1u << 0;
 
         /// <summary>推奨ファイル拡張子。</summary>
-        public const string Extension = ".msrc";
+        public const string Extension = ".msrm";
 
         /// <summary>パス文字列のエンコーディング (BOM なし UTF-8)。</summary>
         public static readonly Encoding PathEncoding = new UTF8Encoding(false);

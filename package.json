@@ -1,6 +1,6 @@
 {
   "name": "com.mudship.recorder",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "displayName": "MudShip Recorder",
   "description": "Transform / モーション等を低負荷・GCフリーで記録する .msrc レコーダーと、.msrc → .anim 変換ツール。録画中はバイナリのダンプのみ行い、メインのフレームレートに寄生しない設計。将来的に Facial / DMX など他ストリームの記録にも拡張予定。",
   "unity": "6000.0",

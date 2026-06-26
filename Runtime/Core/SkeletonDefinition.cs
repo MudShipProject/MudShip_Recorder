@@ -33,7 +33,7 @@ namespace MudShip.MotionRecorder
         }
 
         /// <summary>1フレームのバイト数。</summary>
-        public int Stride => MsrcFormat.ComputeStride(Bones.Length, PositionBoneIndices.Length);
+        public int Stride => MsrmFormat.ComputeStride(Bones.Length, PositionBoneIndices.Length);
 
         /// <summary>
         /// root 以下の全 Transform (root 自身は除く) を走査してスケルトン定義を構築する。

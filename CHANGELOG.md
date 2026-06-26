@@ -2,6 +2,32 @@
 
 All notable changes to this package will be documented in this file.
 
+## [0.4.0] - 2026-06-26
+
+録画系を `MS_Recorder`（マスター）＋ `MS_RecorderSettings`（プロファイル SO）へ再設計し、
+表情（BlendShape）ストリームを追加。詳細設計は `Documentation~/recorder-architecture.md`。
+
+### Added
+- **表情記録**：`MsrfFormat`（`.msrf`）/ `FaceDefinition` / `FaceRecorderSession`。
+  指定 `SkinnedMeshRenderer` 群の全 BlendShape ウェイトを GC フリーで記録。
+- **`MS_Recorder`（MonoBehaviour）**：録画スロット（プロファイル＋シーン配線）のリスト＋録画ボタン。
+  Character スロットは 1 プロファイルで `.msrm`＋`.msrf` を同時出力。録画開始時の共通 `startTime` で同期。
+- **`MS_RecorderSettings`（ScriptableObject）**：`Type`（Character/Camera/Transform）＋ Output Directory＋fps/chunk/pool。
+  Camera/Transform は枠のみ（未実装）。Create ▸ MudShip ▸ Recorder Settings。
+- `ChunkedStreamWriter`：形式非依存の汎用チャンクライタ（旧 `MsrcStreamWriter` を抽出・共通化）。
+- `.msrf → .anim` 変換（SkinnedMeshRenderer の `blendShape.<名前>` カーブ）。
+- `SkeletonDefinition.Stride` 等は新形式に追従。
+
+### Changed
+- **（破壊的）拡張子・形式を改称**：`.msrc`/`MSRC`/`MsrcFormat` → `.msrm`/`MSRM`/`MsrmFormat`（m = Motion）。
+  体系：`msr` ＝ MudShip Recording、末尾 1 文字 ＝ ストリーム種別（m/f）。
+- **（破壊的）`MotionRecorderBehaviour` を廃止**し `MS_Recorder` に統合（記録エンジンは再利用部品として存続）。
+  録画設定はシーンの Targets から SO プロファイル＋スロットへ再編。既存シーンは作り直しになる。
+- `.anim` 変換メニューを **Assets ▸ MudShip ▸ Convert recording to .anim**（`.msrm`/`.msrf` 両対応）に統合。
+
+### Removed
+- 旧 `.msrc` 形式（`MSRC`）。旧 `.msrc` ファイルは新コンバータでは読めない。
+
 ## [0.3.0] - 2026-06-26
 
 ### Fixed
