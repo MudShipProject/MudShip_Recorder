@@ -82,6 +82,12 @@ namespace MudShip.MotionRecorder
                     : outputDirectory;
         }
 
+        [Tooltip("全ファイル名の先頭に付く文字列。空可。<Take> でテイク番号を 3 桁ゼロ詰めで埋め込める。\n最終形式: (prefix)_(type)_(object)_(date)")]
+        [SerializeField] string _fileNamePrefix = "";
+
+        [Tooltip("テイク番号。プレフィックス内の <Take> に展開される。")]
+        [SerializeField] int _take = 1;
+
         [Tooltip("録画スロット一覧。各スロット = 種別・出力先・Settings・シーン配線。")]
         [SerializeField] List<Slot> _slots = new List<Slot>();
 
@@ -163,7 +169,7 @@ namespace MudShip.MotionRecorder
 
             string dir = slot.ResolveOutputDirectory();
             var settings = slot.settings;
-            string fileBase = UniqueName($"{MakeSafeFileName(animator.gameObject.name)}_{stamp}", usedNames);
+            string fileBase = UniqueName(BuildFileBase("Character", animator.gameObject.name, stamp), usedNames);
 
             // モーション (.msrm)
             var skeleton = SkeletonDefinition.FromAnimator(animator, slot.hipBone, slot.addBones);
@@ -196,7 +202,7 @@ namespace MudShip.MotionRecorder
             }
 
             string dir = slot.ResolveOutputDirectory();
-            string fileBase = UniqueName($"{MakeSafeFileName(target.gameObject.name)}_{stamp}", usedNames);
+            string fileBase = UniqueName(BuildFileBase("Transform", target.gameObject.name, stamp), usedNames);
 
             var session = new TransformRecorderSession(target, slot.settings, slot.space == RecordSpace.World);
             session.Start(Path.Combine(dir, fileBase + MsrtFormat.Extension));
@@ -213,7 +219,7 @@ namespace MudShip.MotionRecorder
             }
 
             string dir = slot.ResolveOutputDirectory();
-            string fileBase = UniqueName($"{MakeSafeFileName(cam.gameObject.name)}_{stamp}", usedNames);
+            string fileBase = UniqueName(BuildFileBase("Camera", cam.gameObject.name, stamp), usedNames);
 
             var session = new CameraRecorderSession(cam, slot.settings, slot.space == RecordSpace.World);
             session.Start(Path.Combine(dir, fileBase + MsrcFormat.Extension));
@@ -223,8 +229,8 @@ namespace MudShip.MotionRecorder
         void StartAudio(Slot slot, int index, string stamp, HashSet<string> usedNames)
         {
             string dir = slot.ResolveOutputDirectory();
-            string label = string.IsNullOrEmpty(slot.audioDevice) ? "Audio" : slot.audioDevice;
-            string fileBase = UniqueName($"{MakeSafeFileName(label)}_{stamp}", usedNames);
+            string label = string.IsNullOrEmpty(slot.audioDevice) ? "Mic" : slot.audioDevice;
+            string fileBase = UniqueName(BuildFileBase("Audio", label, stamp), usedNames);
 
             var session = new AudioRecorderSession(slot.audioDevice, slot.audioSampleRate, slot.settings);
             session.Start(Path.Combine(dir, fileBase + MsraFormat.Extension));
@@ -340,6 +346,37 @@ namespace MudShip.MotionRecorder
                     $"[MS_Recorder] '{animator.name}': 指定した SkinnedMeshRenderer の一部が記録対象外でした ({recorded}/{requested})。" +
                     "Animator の GameObject 配下にあり、BlendShape を持つ SMR のみ記録します。",
                     this);
+        }
+
+        /// <summary>ファイル名のベース「(prefix)_(type)_(object)_(date)」を生成する（拡張子なし）。</summary>
+        string BuildFileBase(string typeLabel, string objectName, string stamp)
+        {
+            string prefix = ResolvePrefix();
+            string name = string.IsNullOrEmpty(prefix)
+                ? $"{typeLabel}_{objectName}_{stamp}"
+                : $"{prefix}_{typeLabel}_{objectName}_{stamp}";
+            return MakeSafeFileName(name);
+        }
+
+        /// <summary>プレフィックス中の &lt;Take&gt; を 3 桁ゼロ詰めのテイク番号へ展開する。</summary>
+        string ResolvePrefix()
+            => ReplaceCaseInsensitive(_fileNamePrefix ?? "", "<Take>", _take.ToString("000")).Trim();
+
+        static string ReplaceCaseInsensitive(string s, string token, string value)
+        {
+            if (string.IsNullOrEmpty(s))
+                return s;
+
+            var sb = new System.Text.StringBuilder(s.Length);
+            int start = 0, idx;
+            while ((idx = s.IndexOf(token, start, StringComparison.OrdinalIgnoreCase)) >= 0)
+            {
+                sb.Append(s, start, idx - start);
+                sb.Append(value);
+                start = idx + token.Length;
+            }
+            sb.Append(s, start, s.Length - start);
+            return sb.ToString();
         }
 
         static string UniqueName(string baseName, HashSet<string> used)

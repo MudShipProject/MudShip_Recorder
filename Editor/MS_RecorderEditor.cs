@@ -1,23 +1,38 @@
 using System.IO;
 using UnityEditor;
+using UnityEditorInternal;
 using UnityEngine;
 
 namespace MudShip.MotionRecorder.Editor
 {
     /// <summary>
-    /// <see cref="MS_Recorder"/> 用のカスタムインスペクタ。スロットをカード表示し、
-    /// スロットの type に応じてシーン参照フィールドを出し分ける。
+    /// <see cref="MS_Recorder"/> 用のカスタムインスペクタ。スロットを ReorderableList で表示し、
+    /// type に応じてフィールドを出し分け、種別ごとに左端のカラーで色分けする。
     /// プレイモード中は録画開始/停止ボタンと各セッションの状態を表示する。
     /// </summary>
     [CustomEditor(typeof(MS_Recorder))]
     public class MS_RecorderEditor : UnityEditor.Editor
     {
         SerializedProperty _slots;
+        SerializedProperty _fileNamePrefix;
+        SerializedProperty _take;
+        ReorderableList _list;
         double _lastRepaint;
 
         void OnEnable()
         {
             _slots = serializedObject.FindProperty("_slots");
+            _fileNamePrefix = serializedObject.FindProperty("_fileNamePrefix");
+            _take = serializedObject.FindProperty("_take");
+
+            _list = new ReorderableList(serializedObject, _slots, true, true, true, true)
+            {
+                drawHeaderCallback = r => EditorGUI.LabelField(r, "Recording Slots"),
+                elementHeightCallback = i => DrawOrMeasure(new Rect(0, 0, 0, 0), i, false),
+                drawElementCallback = (r, i, active, focused) => DrawOrMeasure(r, i, true),
+                onAddCallback = OnAdd,
+            };
+
             EditorApplication.update += ThrottledRepaint;
         }
 
@@ -26,8 +41,7 @@ namespace MudShip.MotionRecorder.Editor
             EditorApplication.update -= ThrottledRepaint;
         }
 
-        // 録画中の状態表示更新は ~10Hz に間引く。毎フレーム Repaint するとインスペクタの
-        // 再描画コストがゲームのフレームレートを大きく削るため。
+        // 録画中の状態表示更新は ~10Hz に間引く（毎フレーム Repaint はフレームレートを削るため）。
         void ThrottledRepaint()
         {
             var recorder = target as MS_Recorder;
@@ -48,8 +62,7 @@ namespace MudShip.MotionRecorder.Editor
 
             EditorGUILayout.Space(2);
 
-            // 録画中はスロット一覧の描画 (ObjectField/リスト) を丸ごとスキップし、
-            // ボタンと状態表示だけにする。これが録画中のインスペクタ負荷の主因。
+            // 録画中は重いリスト描画をスキップし、ボタンと状態表示だけにする。
             if (Application.isPlaying && recorder.IsRecording)
             {
                 DrawRecordButton(recorder);
@@ -58,7 +71,16 @@ namespace MudShip.MotionRecorder.Editor
             }
 
             serializedObject.Update();
-            DrawSlots();
+
+            // --- ファイル命名 ---
+            EditorGUILayout.LabelField("File Naming", EditorStyles.boldLabel);
+            EditorGUILayout.PropertyField(_fileNamePrefix, new GUIContent("Name Prefix", "全ファイル名の先頭。<Take> でテイク番号を埋め込み"));
+            EditorGUILayout.PropertyField(_take, new GUIContent("Take"));
+            EditorGUILayout.LabelField(" ", "形式: (prefix)_(type)_(object)_(date)", EditorStyles.miniLabel);
+
+            EditorGUILayout.Space(8);
+            _list.DoLayoutList();
+
             serializedObject.ApplyModifiedProperties();
 
             EditorGUILayout.Space(10);
@@ -75,156 +97,122 @@ namespace MudShip.MotionRecorder.Editor
             DrawStatus(recorder);
         }
 
-        // ---- スロット ------------------------------------------------------------
+        // ---- スロット要素の描画/高さ計算（共通） --------------------------------
 
-        void DrawSlots()
+        float DrawOrMeasure(Rect rect, int index, bool draw)
         {
-            using (new EditorGUILayout.HorizontalScope())
+            var el = _slots.GetArrayElementAtIndex(index);
+            var typeProp = el.FindPropertyRelative("type");
+
+            float line = EditorGUIUtility.singleLineHeight;
+            float sp = EditorGUIUtility.standardVerticalSpacing;
+            float pad = 4f;
+            float stripW = 4f;
+
+            float y = rect.y + pad;
+            float x = rect.x + stripW + 6f;
+            float w = rect.width - stripW - 10f;
+
+            if (draw)
             {
-                EditorGUILayout.LabelField($"Recording Slots ({_slots.arraySize})", EditorStyles.boldLabel);
-                GUILayout.FlexibleSpace();
-                if (GUILayout.Button("＋ 追加", GUILayout.Width(72)))
-                    AddSlot();
+                var strip = new Rect(rect.x, rect.y + 1f, stripW, rect.height - 2f);
+                EditorGUI.DrawRect(strip, TypeColor(typeProp.enumValueIndex));
             }
 
-            if (_slots.arraySize == 0)
+            Rect Row(float h)
             {
-                EditorGUILayout.Space(2);
-                EditorGUILayout.HelpBox("スロットがありません。「＋ 追加」で録画対象を追加してください。", MessageType.Info);
-                return;
+                var r = new Rect(x, y, w, h);
+                y += h + sp;
+                return r;
             }
 
-            EditorGUILayout.Space(4);
-
-            int removeAt = -1;
-            for (int i = 0; i < _slots.arraySize; i++)
+            void Prop(string name)
             {
-                DrawSlotCard(i, ref removeAt);
-                EditorGUILayout.Space(6);
+                var p = el.FindPropertyRelative(name);
+                float h = EditorGUI.GetPropertyHeight(p, true);
+                var r = Row(h);
+                if (draw) EditorGUI.PropertyField(r, p, true);
             }
 
-            if (removeAt >= 0)
-                _slots.DeleteArrayElementAtIndex(removeAt);
+            // Type
+            {
+                var r = Row(line);
+                if (draw) EditorGUI.PropertyField(r, typeProp, new GUIContent("Type"));
+            }
+
+            // Output Directory + 参照ボタン
+            {
+                var r = Row(line);
+                if (draw)
+                {
+                    var outProp = el.FindPropertyRelative("outputDirectory");
+                    const float bw = 50f;
+                    var f = new Rect(r.x, r.y, r.width - bw - 2f, r.height);
+                    var b = new Rect(r.xMax - bw, r.y, bw, r.height);
+                    EditorGUI.PropertyField(f, outProp, new GUIContent("Output Dir"));
+                    if (GUI.Button(b, "参照…")) BrowseOutputDirectory(outProp);
+                }
+            }
+
+            // Settings
+            Prop("settings");
+
+            int t = typeProp.enumValueIndex;
+            if (t == (int)MS_Recorder.RecorderType.Character)
+            {
+                Prop("animator");
+                Prop("hipBone");
+                Prop("addBones");
+                Prop("faceRenderers");
+            }
+            else if (t == (int)MS_Recorder.RecorderType.Transform)
+            {
+                Prop("transformTarget");
+                Prop("space");
+            }
+            else if (t == (int)MS_Recorder.RecorderType.Camera)
+            {
+                Prop("cameraTarget");
+                Prop("space");
+            }
+            else if (t == (int)MS_Recorder.RecorderType.Audio)
+            {
+                var r = Row(line);
+                if (draw) DrawAudioDeviceRect(r, el.FindPropertyRelative("audioDevice"));
+                Prop("audioSampleRate");
+            }
+
+            return (y - rect.y) + pad - sp;
         }
 
-        void DrawSlotCard(int i, ref int removeAt)
+        static Color TypeColor(int type) => type switch
         {
-            var slot = _slots.GetArrayElementAtIndex(i);
-            var typeProp = slot.FindPropertyRelative("type");
+            (int)MS_Recorder.RecorderType.Character => new Color(0.30f, 0.55f, 0.85f), // 青
+            (int)MS_Recorder.RecorderType.Camera    => new Color(0.90f, 0.55f, 0.25f), // 橙
+            (int)MS_Recorder.RecorderType.Transform => new Color(0.35f, 0.70f, 0.40f), // 緑
+            (int)MS_Recorder.RecorderType.Audio     => new Color(0.70f, 0.40f, 0.78f), // 紫
+            _ => Color.gray,
+        };
 
-            using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
-            {
-                // ヘッダ行: 折りたたみ / バッジ / 削除
-                using (new EditorGUILayout.HorizontalScope())
-                {
-                    slot.isExpanded = EditorGUILayout.Foldout(slot.isExpanded, $"Slot {i + 1}", true);
-                    GUILayout.FlexibleSpace();
-                    GUILayout.Label(typeProp.enumDisplayNames[typeProp.enumValueIndex], EditorStyles.miniLabel);
-                    if (GUILayout.Button("✕", GUILayout.Width(22)))
-                        removeAt = i;
-                }
-
-                if (!slot.isExpanded)
-                    return;
-
-                EditorGUILayout.Space(2);
-                EditorGUI.indentLevel++;
-
-                EditorGUILayout.PropertyField(typeProp, new GUIContent("Type"));
-
-                // 出力先 + 参照ボタン
-                var outDirProp = slot.FindPropertyRelative("outputDirectory");
-                using (new EditorGUILayout.HorizontalScope())
-                {
-                    EditorGUILayout.PropertyField(outDirProp, new GUIContent("Output Directory"));
-                    if (GUILayout.Button("参照…", GUILayout.Width(56)))
-                        BrowseOutputDirectory(outDirProp);
-                }
-                if (string.IsNullOrEmpty(outDirProp.stringValue))
-                    EditorGUILayout.LabelField(" ", "未設定なら persistentDataPath/MudShipRecordings", EditorStyles.miniLabel);
-
-                EditorGUILayout.PropertyField(slot.FindPropertyRelative("settings"), new GUIContent("Settings"), true);
-
-                int typeIndex = typeProp.enumValueIndex;
-                if (typeIndex == (int)MS_Recorder.RecorderType.Character)
-                {
-                    EditorGUILayout.Space(4);
-                    EditorGUILayout.LabelField("Motion", EditorStyles.miniBoldLabel);
-                    EditorGUILayout.PropertyField(slot.FindPropertyRelative("animator"));
-                    EditorGUILayout.PropertyField(slot.FindPropertyRelative("hipBone"));
-                    EditorGUILayout.PropertyField(slot.FindPropertyRelative("addBones"), true);
-
-                    EditorGUILayout.Space(4);
-                    EditorGUILayout.LabelField("Facial", EditorStyles.miniBoldLabel);
-                    EditorGUILayout.PropertyField(slot.FindPropertyRelative("faceRenderers"), true);
-                }
-                else if (typeIndex == (int)MS_Recorder.RecorderType.Transform)
-                {
-                    EditorGUILayout.Space(4);
-                    EditorGUILayout.LabelField("Transform（Pos / Rot / Scale）", EditorStyles.miniBoldLabel);
-                    EditorGUILayout.PropertyField(slot.FindPropertyRelative("transformTarget"), new GUIContent("Transform Target"));
-                    EditorGUILayout.PropertyField(slot.FindPropertyRelative("space"), new GUIContent("Record Space"));
-                }
-                else if (typeIndex == (int)MS_Recorder.RecorderType.Camera)
-                {
-                    EditorGUILayout.Space(4);
-                    EditorGUILayout.LabelField("Camera（Pos / Rot / Scale / FOV）", EditorStyles.miniBoldLabel);
-                    EditorGUILayout.PropertyField(slot.FindPropertyRelative("cameraTarget"), new GUIContent("Camera Target"));
-                    EditorGUILayout.PropertyField(slot.FindPropertyRelative("space"), new GUIContent("Record Space"));
-                }
-                else if (typeIndex == (int)MS_Recorder.RecorderType.Audio)
-                {
-                    EditorGUILayout.Space(4);
-                    EditorGUILayout.LabelField("Audio（入力ソース）", EditorStyles.miniBoldLabel);
-                    DrawAudioDevice(slot.FindPropertyRelative("audioDevice"));
-                    EditorGUILayout.PropertyField(slot.FindPropertyRelative("audioSampleRate"), new GUIContent("Sample Rate (Hz)"));
-                }
-
-                EditorGUI.indentLevel--;
-            }
-        }
-
-        static void DrawAudioDevice(SerializedProperty deviceProp)
+        static void DrawAudioDeviceRect(Rect r, SerializedProperty deviceProp)
         {
             string[] devices = Microphone.devices;
-            using (new EditorGUILayout.HorizontalScope())
+            if (devices == null || devices.Length == 0)
             {
-                if (devices == null || devices.Length == 0)
-                {
-                    EditorGUILayout.LabelField("Audio Device", "（入力デバイスなし）");
-                }
-                else
-                {
-                    int cur = Mathf.Max(0, System.Array.IndexOf(devices, deviceProp.stringValue));
-                    int sel = EditorGUILayout.Popup("Audio Device", cur, devices);
-                    if (sel >= 0 && sel < devices.Length)
-                        deviceProp.stringValue = devices[sel];
-                }
-                // Microphone.devices は毎描画で取得されるため、クリックで再描画＝更新になる。
-                GUILayout.Button("更新", GUILayout.Width(48));
+                EditorGUI.LabelField(r, "Audio Device", "（入力デバイスなし）");
+                return;
             }
+            int cur = Mathf.Max(0, System.Array.IndexOf(devices, deviceProp.stringValue));
+            int sel = EditorGUI.Popup(r, "Audio Device", cur, devices);
+            if (sel >= 0 && sel < devices.Length)
+                deviceProp.stringValue = devices[sel];
         }
 
-        void BrowseOutputDirectory(SerializedProperty outputDirProp)
-        {
-            // プロジェクトのルート (Assets の親) を起点に開く。
-            string projectRoot = Path.GetDirectoryName(Application.dataPath);
-
-            string selected = EditorUtility.OpenFolderPanel("録画の出力先フォルダを選択", projectRoot, "");
-            if (string.IsNullOrEmpty(selected))
-                return; // キャンセル
-
-            outputDirProp.stringValue = selected;
-            serializedObject.ApplyModifiedProperties();
-            GUIUtility.ExitGUI(); // OpenFolderPanel 後のレイアウト不整合を防ぐ
-        }
-
-        void AddSlot()
+        void OnAdd(ReorderableList list)
         {
             int idx = _slots.arraySize;
             _slots.InsertArrayElementAtIndex(idx);
 
-            // 直前要素のコピーになるため、新規スロットとして既定値にリセットする。
             var added = _slots.GetArrayElementAtIndex(idx);
             added.isExpanded = true;
             added.FindPropertyRelative("type").enumValueIndex = (int)MS_Recorder.RecorderType.Character;
@@ -244,6 +232,20 @@ namespace MudShip.MotionRecorder.Editor
             added.FindPropertyRelative("cameraTarget").objectReferenceValue = null;
             added.FindPropertyRelative("audioDevice").stringValue = "";
             added.FindPropertyRelative("audioSampleRate").intValue = 48000;
+        }
+
+        void BrowseOutputDirectory(SerializedProperty outputDirProp)
+        {
+            // プロジェクトのルート (Assets の親) を起点に開く。
+            string projectRoot = Path.GetDirectoryName(Application.dataPath);
+
+            string selected = EditorUtility.OpenFolderPanel("録画の出力先フォルダを選択", projectRoot, "");
+            if (string.IsNullOrEmpty(selected))
+                return;
+
+            outputDirProp.stringValue = selected;
+            serializedObject.ApplyModifiedProperties();
+            GUIUtility.ExitGUI();
         }
 
         // ---- 録画ボタン・状態 ----------------------------------------------------

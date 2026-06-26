@@ -21,6 +21,10 @@ All notable changes to this package will be documented in this file.
   PCM を 16-bit で記録（サンプルレート指定可）。`.msra → .wav` 変換に対応。
   ※ Unity が録れるのは入力デバイスのみ。システム再生音は仮想オーディオケーブル経由で入力として録る。
 - `ChunkedStreamWriter.WriteFrames`：複数フレームを一括書き込みするバルク API（音声用）。
+- **ファイル命名のカスタマイズ**：`MS_Recorder` に `Name Prefix`（全ファイル共通の接頭辞、`<Take>` トークン対応）と
+  `Take`（番号、`<Take>` に 3 桁ゼロ詰めで展開）を追加。命名規則を **`(prefix)_(type)_(object)_(date)`** に統一。
+- **インスペクタ UI を ReorderableList 化**（ドラッグ並べ替え／＋－）。種別ごとに左端をカラー表示
+  （Character=青 / Camera=橙 / Transform=緑 / Audio=紫）。
 - `IRecorderSession`：全セッション共通インターフェイス。`MS_Recorder` は種別を問わず統一して駆動する。
 - `ChunkedStreamWriter`：形式非依存の汎用チャンクライタ（旧 `MsrcStreamWriter` を抽出・共通化）。
 - `.msrf`/`.msrt`/`.msrc → .anim` 変換（表情は `blendShape.<名前>`、Transform/Camera は対象自身の TRS、Camera は `field of view` も）。
