@@ -145,7 +145,8 @@ namespace MudShip.MotionRecorder.Editor
 
                 EditorGUILayout.PropertyField(slot.FindPropertyRelative("settings"), new GUIContent("Settings"), true);
 
-                if (typeProp.enumValueIndex == (int)MS_Recorder.RecorderType.Character)
+                int typeIndex = typeProp.enumValueIndex;
+                if (typeIndex == (int)MS_Recorder.RecorderType.Character)
                 {
                     EditorGUILayout.Space(4);
                     EditorGUILayout.LabelField("Motion", EditorStyles.miniBoldLabel);
@@ -157,11 +158,17 @@ namespace MudShip.MotionRecorder.Editor
                     EditorGUILayout.LabelField("Facial", EditorStyles.miniBoldLabel);
                     EditorGUILayout.PropertyField(slot.FindPropertyRelative("faceRenderers"), true);
                 }
-                else
+                else if (typeIndex == (int)MS_Recorder.RecorderType.Transform)
                 {
-                    EditorGUILayout.HelpBox(
-                        $"type = {typeProp.enumDisplayNames[typeProp.enumValueIndex]} は未実装です（枠のみ）。",
-                        MessageType.Info);
+                    EditorGUILayout.Space(4);
+                    EditorGUILayout.LabelField("Transform（Pos / Rot / Scale）", EditorStyles.miniBoldLabel);
+                    EditorGUILayout.PropertyField(slot.FindPropertyRelative("transformTarget"), new GUIContent("Transform Target"));
+                }
+                else if (typeIndex == (int)MS_Recorder.RecorderType.Camera)
+                {
+                    EditorGUILayout.Space(4);
+                    EditorGUILayout.LabelField("Camera（Pos / Rot / Scale / FOV）", EditorStyles.miniBoldLabel);
+                    EditorGUILayout.PropertyField(slot.FindPropertyRelative("cameraTarget"), new GUIContent("Camera Target"));
                 }
 
                 EditorGUI.indentLevel--;
@@ -231,8 +238,8 @@ namespace MudShip.MotionRecorder.Editor
 
         static void DrawStatus(MS_Recorder recorder)
         {
-            int total = recorder.MotionSessions.Count + recorder.FaceSessions.Count;
-            if (total == 0)
+            var sessions = recorder.Sessions;
+            if (sessions.Count == 0)
                 return;
 
             EditorGUILayout.Space(6);
@@ -240,18 +247,14 @@ namespace MudShip.MotionRecorder.Editor
 
             using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
             {
-                foreach (var s in recorder.MotionSessions)
-                    DrawSessionLine("M", s.FilePath, s.FrameCount, s.Faulted);
-                foreach (var s in recorder.FaceSessions)
-                    DrawSessionLine("F", s.FilePath, s.FrameCount, s.Faulted);
+                foreach (var s in sessions)
+                {
+                    // ファイル名の拡張子（.msrm/.msrf/.msrt/.msrc）が種別を表す。
+                    string file = string.IsNullOrEmpty(s.FilePath) ? "-" : Path.GetFileName(s.FilePath);
+                    string state = s.Faulted ? "  (エラー)" : "";
+                    EditorGUILayout.LabelField(file, $"{s.FrameCount} frames{state}");
+                }
             }
-        }
-
-        static void DrawSessionLine(string tag, string path, int frames, bool faulted)
-        {
-            string file = string.IsNullOrEmpty(path) ? "-" : Path.GetFileName(path);
-            string state = faulted ? "  (エラー)" : "";
-            EditorGUILayout.LabelField($"[{tag}] {file}", $"{frames} frames{state}");
         }
     }
 }

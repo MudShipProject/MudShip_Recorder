@@ -90,7 +90,9 @@ namespace MudShip.MotionRecorder.Editor
         static bool IsSupported(string path)
             => !string.IsNullOrEmpty(path)
             && (path.EndsWith(MsrmFormat.Extension, StringComparison.OrdinalIgnoreCase)
-             || path.EndsWith(MsrfFormat.Extension, StringComparison.OrdinalIgnoreCase));
+             || path.EndsWith(MsrfFormat.Extension, StringComparison.OrdinalIgnoreCase)
+             || path.EndsWith(MsrtFormat.Extension, StringComparison.OrdinalIgnoreCase)
+             || path.EndsWith(MsrcFormat.Extension, StringComparison.OrdinalIgnoreCase));
 
         // ---- 変換本体 (元ファイルと同じフォルダへ .anim を出力。保存先ポップアップは出さない) ----
 
@@ -100,26 +102,26 @@ namespace MudShip.MotionRecorder.Editor
             string fullPath = Path.Combine(projectRoot, assetPath);
             string ext = Path.GetExtension(assetPath);
 
+            var oic = StringComparison.OrdinalIgnoreCase;
             AnimationClip clip;
-            bool isFace;
-            if (ext.Equals(MsrmFormat.Extension, StringComparison.OrdinalIgnoreCase))
-            {
+            string suffix = "";
+            if (ext.Equals(MsrmFormat.Extension, oic))
                 clip = BuildMotion(fullPath, out _);
-                isFace = false;
-            }
-            else if (ext.Equals(MsrfFormat.Extension, StringComparison.OrdinalIgnoreCase))
+            else if (ext.Equals(MsrfFormat.Extension, oic))
             {
                 clip = BuildFace(fullPath, out _);
-                isFace = true;
+                suffix = "_face"; // モーションと名前が衝突しないように
             }
+            else if (ext.Equals(MsrtFormat.Extension, oic))
+                clip = BuildTransform(fullPath, out _);
+            else if (ext.Equals(MsrcFormat.Extension, oic))
+                clip = BuildCamera(fullPath, out _);
             else
-            {
                 throw new InvalidDataException($"未対応の拡張子です: {ext}");
-            }
 
-            // 元ファイルと同じ Assets フォルダへ出力。モーションと表情で名前が衝突しないよう表情には _face を付ける。
+            // 元ファイルと同じ Assets フォルダへ出力。
             string dir = Path.GetDirectoryName(assetPath);
-            string baseName = Path.GetFileNameWithoutExtension(assetPath) + (isFace ? "_face" : "");
+            string baseName = Path.GetFileNameWithoutExtension(assetPath) + suffix;
             string outPath = AssetDatabase.GenerateUniqueAssetPath(
                 Path.Combine(dir, baseName + ".anim").Replace('\\', '/'));
 
@@ -291,7 +293,114 @@ namespace MudShip.MotionRecorder.Editor
             return clip;
         }
 
+        // ---- .msrt (Transform) --------------------------------------------------
+
+        static AnimationClip BuildTransform(string path, out int frameCount)
+        {
+            using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+            using var br = new BinaryReader(fs);
+
+            byte[] magic = br.ReadBytes(4);
+            if (magic.Length != 4 || magic[0] != 'M' || magic[1] != 'S' || magic[2] != 'R' || magic[3] != 'T')
+                throw new InvalidDataException("MSRT マジックが一致しません。.msrt ファイルではない可能性があります。");
+
+            ushort version = br.ReadUInt16();
+            uint flags = br.ReadUInt32();
+            float nominalFps = br.ReadSingle();
+            uint headerFrameCount = br.ReadUInt32();
+
+            bool hasTimestamp = (flags & MsrtFormat.FlagHasTimestamp) != 0;
+            int stride = (hasTimestamp ? 8 : 0) + 12 + 16 + 12;
+            frameCount = ResolveFrameCount(fs, headerFrameCount, stride);
+
+            var times = new float[frameCount];
+            var pos = NewChannels(3, frameCount);
+            var rot = NewChannels(4, frameCount);
+            var scl = NewChannels(3, frameCount);
+
+            for (int f = 0; f < frameCount; f++)
+            {
+                if ((f & 0x3FF) == 0)
+                    EditorUtility.DisplayProgressBar("MudShip Recorder", $"読み込み中… {f}/{frameCount}", (float)f / frameCount);
+
+                times[f] = hasTimestamp ? (float)br.ReadDouble() : f / Mathf.Max(1f, nominalFps);
+                for (int a = 0; a < 3; a++) pos[a][f] = br.ReadSingle();
+                for (int a = 0; a < 4; a++) rot[a][f] = br.ReadSingle();
+                for (int a = 0; a < 3; a++) scl[a][f] = br.ReadSingle();
+            }
+
+            var clip = new AnimationClip { frameRate = nominalFps > 0f ? nominalFps : 60f };
+            EditorUtility.DisplayProgressBar("MudShip Recorder", "カーブ生成中…", 0.9f);
+            SetTrsCurves(clip, times, pos, rot, scl);
+            clip.EnsureQuaternionContinuity();
+            return clip;
+        }
+
+        // ---- .msrc (Camera) -----------------------------------------------------
+
+        static AnimationClip BuildCamera(string path, out int frameCount)
+        {
+            using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+            using var br = new BinaryReader(fs);
+
+            byte[] magic = br.ReadBytes(4);
+            if (magic.Length != 4 || magic[0] != 'M' || magic[1] != 'S' || magic[2] != 'R' || magic[3] != 'C')
+                throw new InvalidDataException("MSRC マジックが一致しません。.msrc ファイルではない可能性があります。");
+
+            ushort version = br.ReadUInt16();
+            uint flags = br.ReadUInt32();
+            float nominalFps = br.ReadSingle();
+            uint headerFrameCount = br.ReadUInt32();
+
+            bool hasTimestamp = (flags & MsrcFormat.FlagHasTimestamp) != 0;
+            int stride = (hasTimestamp ? 8 : 0) + 12 + 16 + 12 + 4;
+            frameCount = ResolveFrameCount(fs, headerFrameCount, stride);
+
+            var times = new float[frameCount];
+            var pos = NewChannels(3, frameCount);
+            var rot = NewChannels(4, frameCount);
+            var scl = NewChannels(3, frameCount);
+            var fov = new float[frameCount];
+
+            for (int f = 0; f < frameCount; f++)
+            {
+                if ((f & 0x3FF) == 0)
+                    EditorUtility.DisplayProgressBar("MudShip Recorder", $"読み込み中… {f}/{frameCount}", (float)f / frameCount);
+
+                times[f] = hasTimestamp ? (float)br.ReadDouble() : f / Mathf.Max(1f, nominalFps);
+                for (int a = 0; a < 3; a++) pos[a][f] = br.ReadSingle();
+                for (int a = 0; a < 4; a++) rot[a][f] = br.ReadSingle();
+                for (int a = 0; a < 3; a++) scl[a][f] = br.ReadSingle();
+                fov[f] = br.ReadSingle();
+            }
+
+            var clip = new AnimationClip { frameRate = nominalFps > 0f ? nominalFps : 60f };
+            EditorUtility.DisplayProgressBar("MudShip Recorder", "カーブ生成中…", 0.9f);
+            SetTrsCurves(clip, times, pos, rot, scl);
+            clip.SetCurve("", typeof(Camera), "field of view", BuildLinearCurve(times, fov));
+            clip.EnsureQuaternionContinuity();
+            return clip;
+        }
+
         // ---- 共通 ---------------------------------------------------------------
+
+        static float[][] NewChannels(int channels, int frameCount)
+        {
+            var a = new float[channels][];
+            for (int c = 0; c < channels; c++) a[c] = new float[frameCount];
+            return a;
+        }
+
+        /// <summary>path 空（対象 GameObject 自身）に localPosition/localRotation/localScale カーブを張る。</summary>
+        static void SetTrsCurves(AnimationClip clip, float[] times, float[][] pos, float[][] rot, float[][] scl)
+        {
+            string[] posP = { "localPosition.x", "localPosition.y", "localPosition.z" };
+            string[] rotP = { "localRotation.x", "localRotation.y", "localRotation.z", "localRotation.w" };
+            string[] sclP = { "localScale.x", "localScale.y", "localScale.z" };
+            for (int a = 0; a < 3; a++) clip.SetCurve("", typeof(Transform), posP[a], BuildLinearCurve(times, pos[a]));
+            for (int a = 0; a < 4; a++) clip.SetCurve("", typeof(Transform), rotP[a], BuildLinearCurve(times, rot[a]));
+            for (int a = 0; a < 3; a++) clip.SetCurve("", typeof(Transform), sclP[a], BuildLinearCurve(times, scl[a]));
+        }
 
         /// <summary>ヘッダの frameCount（0 ならファイル長から復元）をファイル長以内にクランプして返す。</summary>
         static int ResolveFrameCount(FileStream fs, uint headerFrameCount, int stride)

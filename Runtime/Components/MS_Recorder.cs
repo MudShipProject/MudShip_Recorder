@@ -17,7 +17,7 @@ namespace MudShip.MotionRecorder
     [DisallowMultipleComponent]
     public class MS_Recorder : MonoBehaviour
     {
-        /// <summary>記録の種別。Camera / Transform は枠のみ（機能は後日）。</summary>
+        /// <summary>記録の種別。</summary>
         public enum RecorderType
         {
             Character,
@@ -27,7 +27,7 @@ namespace MudShip.MotionRecorder
 
         /// <summary>
         /// 録画対象 1 件分のスロット。種別・出力先・Settings・シーン配線をすべてここに持つ
-        /// （ScriptableObject は使わず、シーンに直接保存する）。Character タイプのとき Animator 以下を使う。
+        /// （ScriptableObject は使わず、シーンに直接保存する）。type に応じて使うフィールドが変わる。
         /// </summary>
         [Serializable]
         public class Slot
@@ -52,6 +52,12 @@ namespace MudShip.MotionRecorder
             [Tooltip("表情を記録する SkinnedMeshRenderer 群（各 SMR の全 BlendShape を記録）。\nAnimator の GameObject 配下にあること。空なら表情は記録しない。")]
             public List<SkinnedMeshRenderer> faceRenderers = new List<SkinnedMeshRenderer>();
 
+            [Tooltip("[Transform タイプ] 記録対象の Transform。localPosition / localRotation / localScale を記録する。")]
+            public Transform transformTarget;
+
+            [Tooltip("[Camera タイプ] 記録対象の Camera。Transform に加えて fieldOfView も記録する。")]
+            public Camera cameraTarget;
+
             /// <summary>実際の出力先フォルダを解決する。</summary>
             public string ResolveOutputDirectory()
                 => string.IsNullOrEmpty(outputDirectory)
@@ -59,11 +65,10 @@ namespace MudShip.MotionRecorder
                     : outputDirectory;
         }
 
-        [Tooltip("録画スロット一覧。各スロット = プロファイル（SO）＋シーン配線。")]
+        [Tooltip("録画スロット一覧。各スロット = 種別・出力先・Settings・シーン配線。")]
         [SerializeField] List<Slot> _slots = new List<Slot>();
 
-        readonly List<MotionRecorderSession> _motion = new List<MotionRecorderSession>();
-        readonly List<FaceRecorderSession> _face = new List<FaceRecorderSession>();
+        readonly List<IRecorderSession> _sessions = new List<IRecorderSession>();
         double _startTime;
 
         /// <summary>録画スロット一覧（実行時に編集可能）。</summary>
@@ -72,11 +77,8 @@ namespace MudShip.MotionRecorder
         /// <summary>録画中か。</summary>
         public bool IsRecording { get; private set; }
 
-        /// <summary>現在（または直近）のモーションセッション一覧。</summary>
-        public IReadOnlyList<MotionRecorderSession> MotionSessions => _motion;
-
-        /// <summary>現在（または直近）の表情セッション一覧。</summary>
-        public IReadOnlyList<FaceRecorderSession> FaceSessions => _face;
+        /// <summary>現在（または直近）の全セッション一覧（種別混在）。</summary>
+        public IReadOnlyList<IRecorderSession> Sessions => _sessions;
 
         /// <summary>録画開始時に発火。</summary>
         public event Action RecordingStarted;
@@ -111,9 +113,9 @@ namespace MudShip.MotionRecorder
                 }
             }
 
-            if (_motion.Count == 0 && _face.Count == 0)
+            if (_sessions.Count == 0)
             {
-                Debug.LogWarning("[MS_Recorder] 記録対象が 1 つもありません。スロットに type=Character と Animator を設定してください。", this);
+                Debug.LogWarning("[MS_Recorder] 記録対象が 1 つもありません。スロットに種別と対象を設定してください。", this);
                 return;
             }
 
@@ -124,16 +126,20 @@ namespace MudShip.MotionRecorder
 
         void StartSlot(Slot slot, int index, string stamp, HashSet<string> usedNames)
         {
-            if (slot.type != RecorderType.Character)
+            switch (slot.type)
             {
-                Debug.Log($"[MS_Recorder] Slot {index + 1}: type={slot.type} は未実装のためスキップします。", this);
-                return;
+                case RecorderType.Character: StartCharacter(slot, index, stamp, usedNames); break;
+                case RecorderType.Transform: StartTransform(slot, index, stamp, usedNames); break;
+                case RecorderType.Camera: StartCamera(slot, index, stamp, usedNames); break;
             }
+        }
 
+        void StartCharacter(Slot slot, int index, string stamp, HashSet<string> usedNames)
+        {
             var animator = slot.animator;
             if (animator == null)
             {
-                Debug.LogWarning($"[MS_Recorder] Slot {index + 1}: Animator 未設定のためスキップします。", this);
+                Debug.LogWarning($"[MS_Recorder] Slot {index + 1} (Character): Animator 未設定のためスキップします。", this);
                 return;
             }
 
@@ -146,7 +152,7 @@ namespace MudShip.MotionRecorder
             WarnPositionBones(animator, slot, skeleton);
             var motion = new MotionRecorderSession(skeleton, settings);
             motion.Start(Path.Combine(dir, fileBase + MsrmFormat.Extension));
-            _motion.Add(motion);
+            _sessions.Add(motion);
 
             // 表情 (.msrf) — SMR 指定があるときのみ
             if (slot.faceRenderers != null && slot.faceRenderers.Count > 0)
@@ -157,9 +163,43 @@ namespace MudShip.MotionRecorder
                 {
                     var faceSession = new FaceRecorderSession(face, settings);
                     faceSession.Start(Path.Combine(dir, fileBase + MsrfFormat.Extension));
-                    _face.Add(faceSession);
+                    _sessions.Add(faceSession);
                 }
             }
+        }
+
+        void StartTransform(Slot slot, int index, string stamp, HashSet<string> usedNames)
+        {
+            var target = slot.transformTarget;
+            if (target == null)
+            {
+                Debug.LogWarning($"[MS_Recorder] Slot {index + 1} (Transform): Transform Target 未設定のためスキップします。", this);
+                return;
+            }
+
+            string dir = slot.ResolveOutputDirectory();
+            string fileBase = UniqueName($"{MakeSafeFileName(target.gameObject.name)}_{stamp}", usedNames);
+
+            var session = new TransformRecorderSession(target, slot.settings);
+            session.Start(Path.Combine(dir, fileBase + MsrtFormat.Extension));
+            _sessions.Add(session);
+        }
+
+        void StartCamera(Slot slot, int index, string stamp, HashSet<string> usedNames)
+        {
+            var cam = slot.cameraTarget;
+            if (cam == null)
+            {
+                Debug.LogWarning($"[MS_Recorder] Slot {index + 1} (Camera): Camera Target 未設定のためスキップします。", this);
+                return;
+            }
+
+            string dir = slot.ResolveOutputDirectory();
+            string fileBase = UniqueName($"{MakeSafeFileName(cam.gameObject.name)}_{stamp}", usedNames);
+
+            var session = new CameraRecorderSession(cam, slot.settings);
+            session.Start(Path.Combine(dir, fileBase + MsrcFormat.Extension));
+            _sessions.Add(session);
         }
 
         /// <summary>録画を停止し、全ストリームを確定する。</summary>
@@ -170,12 +210,7 @@ namespace MudShip.MotionRecorder
 
             IsRecording = false;
 
-            foreach (var s in _motion)
-            {
-                try { s.Stop(); }
-                catch (Exception e) { Debug.LogException(e, this); }
-            }
-            foreach (var s in _face)
+            foreach (var s in _sessions)
             {
                 try { s.Stop(); }
                 catch (Exception e) { Debug.LogException(e, this); }
@@ -198,24 +233,13 @@ namespace MudShip.MotionRecorder
             double t = Time.timeAsDouble - _startTime;
             bool faulted = false;
 
-            for (int i = 0; i < _motion.Count; i++)
+            for (int i = 0; i < _sessions.Count; i++)
             {
-                var s = _motion[i];
+                var s = _sessions[i];
                 s.CaptureFrame(t);
                 if (s.Faulted)
                 {
-                    Debug.LogException(s.FaultException ?? new IOException("Motion recording faulted."), this);
-                    faulted = true;
-                }
-            }
-
-            for (int i = 0; i < _face.Count; i++)
-            {
-                var s = _face[i];
-                s.CaptureFrame(t);
-                if (s.Faulted)
-                {
-                    Debug.LogException(s.FaultException ?? new IOException("Face recording faulted."), this);
+                    Debug.LogException(s.FaultException ?? new IOException("Recording faulted."), this);
                     faulted = true;
                 }
             }
@@ -243,18 +267,12 @@ namespace MudShip.MotionRecorder
 
         void DisposeSessions()
         {
-            foreach (var s in _motion)
+            foreach (var s in _sessions)
             {
                 try { s.Dispose(); }
                 catch (Exception e) { Debug.LogException(e, this); }
             }
-            foreach (var s in _face)
-            {
-                try { s.Dispose(); }
-                catch (Exception e) { Debug.LogException(e, this); }
-            }
-            _motion.Clear();
-            _face.Clear();
+            _sessions.Clear();
         }
 
         /// <summary>位置記録ボーンの解決結果を検査し、取りこぼし・未指定を警告する。</summary>

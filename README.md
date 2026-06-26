@@ -20,16 +20,16 @@ Transform / DMX など他ストリームの記録にも拡張予定。
 
 ## 構成
 
-- **`MS_Recorder`（シーンの MonoBehaviour）= スロットのリスト**。設定はすべてこのコンポーネント＝シーンに保存する（ScriptableObject は使わない）。各スロットが持つもの：
-  - `Type`（`Character` / `Camera` / `Transform`。Camera・Transform は枠のみ・未実装）
+- **`MS_Recorder`（シーンの MonoBehaviour）= スロットのリスト**。設定はすべてこのコンポーネント＝シーンに保存する（ScriptableObject は使わない）。各スロット共通：
+  - `Type`（`Character` / `Transform` / `Camera`）
   - `Output Directory`（参照…ボタン付き） / `Settings`（`Nominal Fps` / `Chunk Bytes` / `Pooled Chunk Count`）
-  - `Character` のとき次のシーン参照を表示：
-    - `Animator` … 記録対象
-    - `Hip Bone` … `localPosition` を記録する腰ボーン（空なら Humanoid の Hips を自動採用）
-    - `Add Bones` … 腰に加えて位置も記録する追加ボーン（ツイスト等。回転は全ボーンで記録）
-    - `Face Renderers` … 表情を記録する `SkinnedMeshRenderer` 群（**Animator の GameObject 配下**にあること）
-
-`Character` スロットは 1 つのスロットで `.msrm`（モーション）＋ `.msrf`（表情）を同時に出力する。
+- **`Character`**：1 スロットで `.msrm`（モーション）＋ `.msrf`（表情）を同時出力。
+  - `Animator` … 記録対象
+  - `Hip Bone` … `localPosition` を記録する腰ボーン（空なら Humanoid の Hips を自動採用）
+  - `Add Bones` … 腰に加えて位置も記録する追加ボーン（ツイスト等。回転は全ボーンで記録）
+  - `Face Renderers` … 表情を記録する `SkinnedMeshRenderer` 群（**Animator の GameObject 配下**にあること）
+- **`Transform`**：`Transform Target` の `localPosition / localRotation / localScale` を記録（`.msrt`）。
+- **`Camera`**：`Camera Target` の Transform（Pos/Rot/Scale）＋ `fieldOfView` を記録（`.msrc`）。
 
 ## 使い方（コンポーネント）
 
@@ -63,34 +63,38 @@ motion.Stop(); motion.Dispose();
 facial.Stop(); facial.Dispose();
 ```
 
-## .msrm / .msrf → .anim 変換（Editor）
+## → .anim 変換（Editor）
 
 録画したファイルを `AnimationClip` (.anim) に変換できる（オフライン後処理）。
 全フレームにキーを打つ**ロスレス**変換で、各フレーム時刻の値は元データと完全一致する。
 
-- Assets 内の `.msrm` / `.msrf` を**右クリック ▸ MudShip ▸ Convert recording to .anim**。
+- Assets 内の `.msrm` / `.msrf` / `.msrt` / `.msrc` を**右クリック ▸ MudShip ▸ Convert recording to .anim**（**複数選択可**。元ファイルと同じフォルダに出力）。
   - `.msrm` → Transform パスの `localRotation` / `localPosition` カーブ。
-  - `.msrf` → SkinnedMeshRenderer パスの `blendShape.<名前>` カーブ。
+  - `.msrf` → SkinnedMeshRenderer パスの `blendShape.<名前>` カーブ（`_face` 付きで出力）。
+  - `.msrt` → 対象自身（path 空）の `localPosition` / `localRotation` / `localScale` カーブ。
+  - `.msrc` → 上記に加え `Camera` の `field of view` カーブ。
 
-記録時と同じ root 相対パス構造のリグでのみ正しく再生される（リターゲット不可）。尺が長いと
-キー数が多く重くなる点に注意（軽量化＝キーフレーム削減は今後対応）。
+記録時と同じ構造（Character は root 相対パス、Transform/Camera は対象 GameObject 自身）に適用する前提
+（リターゲット不可）。尺が長いとキー数が多く重くなる点に注意（軽量化＝キーフレーム削減は今後対応）。
 
 ## 公開 API
 
 | 型 | 役割 |
 |---|---|
 | `MS_Recorder` | マスターコンポーネント。録画スロット（種別・出力先・Settings・シーン配線）リスト＋録画ボタン。 |
-| `MotionRecorderSession` | 1 スケルトン → 1 `.msrm` の記録エンジン（MonoBehaviour 非依存）。 |
-| `FaceRecorderSession` | SMR 群 → 1 `.msrf` の記録エンジン（MonoBehaviour 非依存）。 |
-| `SkeletonDefinition` | root 全走査によるボーン列・パス・位置記録ボーンの定義。 |
-| `FaceDefinition` | SMR 群の列挙・root 相対パス・BlendShape 名表の定義。 |
+| `IRecorderSession` | 全セッション共通インターフェイス（`MS_Recorder` はこの形で駆動）。 |
+| `MotionRecorderSession` | 1 スケルトン → 1 `.msrm` の記録エンジン。 |
+| `FaceRecorderSession` | SMR 群 → 1 `.msrf` の記録エンジン。 |
+| `TransformRecorderSession` | 1 Transform → 1 `.msrt`（Pos/Rot/Scale）。 |
+| `CameraRecorderSession` | 1 Camera → 1 `.msrc`（Pos/Rot/Scale＋FOV）。 |
+| `SkeletonDefinition` / `FaceDefinition` | モーション／表情の記録対象定義。 |
 | `RecorderSettings` | fps・チャンクサイズ・プール数の設定。 |
-| `MsrmFormat` / `MsrfFormat` | `.msrm` / `.msrf` フォーマット定数とレイアウト仕様。 |
+| `MsrmFormat` / `MsrfFormat` / `MsrtFormat` / `MsrcFormat` | 各フォーマット定数とレイアウト仕様。 |
 
 ## ファイル形式
 
-`msr` = MudShip Recording、末尾 1 文字 = ストリーム種別（**m** = Motion / **f** = Facial）。
-リトルエンディアン、固定ストライド。詳細は `MsrmFormat.cs` / `MsrfFormat.cs` の doc コメント参照。
+`msr` = MudShip Recording、末尾 1 文字 = ストリーム種別（**m** = Motion / **f** = Facial / **t** = Transform / **c** = Camera）。
+リトルエンディアン、固定ストライド。詳細は各 `Msr*Format.cs` の doc コメント参照。
 
 ```
 .msrm  [Header] magic"MSRM" / version u16 / flags u32 / nominalFps f32 /
@@ -102,13 +106,18 @@ facial.Stop(); facial.Dispose();
                 rendererCount u16 / totalShapeCount u32 / frameCount u32
        [RendererTable] (rendererCount) pathLen u16 + path utf8 / shapeCount u16 / (nameLen u16 + name utf8)
        [Frames] timestamp f64 / weights (f32)xtotalShapeCount
+
+.msrt  [Header] magic"MSRT" / version u16 / flags u32 / nominalFps f32 / frameCount u32
+       [Frames] timestamp f64 / pos (f32x3) / rot (f32x4) / scale (f32x3)
+
+.msrc  [Header] magic"MSRC" / version u16 / flags u32 / nominalFps f32 / frameCount u32
+       [Frames] timestamp f64 / pos (f32x3) / rot (f32x4) / scale (f32x3) / fov f32
 ```
 
 詳細な設計は [`Documentation~/recorder-architecture.md`](Documentation~/recorder-architecture.md) を参照。
 
 ## 今後の予定
 
-- `Camera` / `Transform` ストリームの実装（dropdown は先行追加済み）
 - DMX ストリーム
-- `.msrm` / `.msrf` 直再生器（Transform / SMR へ直接適用）
+- 直再生器（記録した各ストリームを Transform / SMR / Camera へ直接適用）
 - `.anim` のキーフレーム削減（段2・誤差許容つき軽量化）

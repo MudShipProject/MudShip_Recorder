@@ -8,7 +8,7 @@ namespace MudShip.MotionRecorder
     /// MonoBehaviour に依存しない。毎フレーム <see cref="CaptureFrame"/> を呼ぶ側 (通常は LateUpdate) が
     /// timestamp を渡す。<see cref="MotionRecorderSession"/> と対になる表情版。
     /// </summary>
-    public sealed class FaceRecorderSession : IDisposable
+    public sealed class FaceRecorderSession : IRecorderSession
     {
         readonly RecorderSettings _settings;
         ChunkedStreamWriter _writer;

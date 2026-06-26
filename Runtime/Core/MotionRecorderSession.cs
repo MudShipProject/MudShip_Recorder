@@ -21,7 +21,7 @@ namespace MudShip.MotionRecorder
     /// session.Dispose();
     /// </code>
     /// </example>
-    public sealed class MotionRecorderSession : IDisposable
+    public sealed class MotionRecorderSession : IRecorderSession
     {
         readonly RecorderSettings _settings;
         ChunkedStreamWriter _writer;

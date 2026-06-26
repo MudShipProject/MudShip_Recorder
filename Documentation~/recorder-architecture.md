@@ -4,7 +4,7 @@
 
 ## 0. 目的・前提
 
-- Facial / Motion（将来は Camera / Transform / DMX）を記録する**マルチモーダル・レコーダー**。
+- Motion / Facial / Transform / Camera（将来は DMX）を記録する**マルチモーダル・レコーダー**。
 - 最重要制約は不変：**録画がメインプロジェクトの FPS を落とさない**（毎フレーム・ゼロアロケーション、長時間でもメモリ肥大なし）。GC フリーのチャンク書き込み機構を全ストリームで共用する。
 - ランタイムは生バイナリ（`.msrm` / `.msrf` …）を書くだけ。`.anim` 変換等の重い後処理は Editor 側オフラインに分離（既存方針を踏襲）。
 
@@ -13,9 +13,11 @@
 ### MS_Recorder（シーンの MonoBehaviour・マスター）
 - **スロットのリスト**を保持。設定はすべてこのコンポーネント＝シーンに保存する（ScriptableObject は使わない）。
 - 各スロットが持つもの：
-  - **type ドロップダウン**：`Character` / `Camera` / `Transform`（Camera / Transform は枠だけ・機能は後日）
+  - **type ドロップダウン**：`Character` / `Transform` / `Camera`
   - `Output Directory`（＋参照…ボタン）/ `Settings`（`Nominal Fps` / `Chunk Bytes` / `Pooled Chunk Count`）
-  - `Character` のときのシーン配線：`Animator` / `Hip Bone` / `Add Bones` / `Face Renderers`
+  - `Character` のときのシーン配線：`Animator` / `Hip Bone` / `Add Bones` / `Face Renderers`（→ `.msrm`＋`.msrf`）
+  - `Transform` のとき：`Transform Target`（→ `.msrt`、Pos/Rot/Scale）
+  - `Camera` のとき：`Camera Target`（→ `.msrc`、Pos/Rot/Scale＋FOV）
 - **録画開始/停止ボタンを Inspector に集約**（現 `MotionRecorderBehaviour` から移行）。
 - Play 中、録画開始時に**基準 `startTime` を 1 つ確定**し、全スロットの全ストリームへ同じ `Time.timeAsDouble - startTime` を渡す＝**共通タイムコード同期**の土台。
 
@@ -55,8 +57,10 @@
 
 - **`msr` = MudShip Recording**、**末尾 1 文字 = ストリーム種別**。
   - `.msrm`（magic `MSRM`）… **m = Motion**（スケルトン。旧 `.msrc` から改称）
-  - `.msrf`（magic `MSRF`）… **f = Facial**（新規）
-  - 将来：Camera / Transform / DMX も `msr` ＋種別文字で拡張。
+  - `.msrf`（magic `MSRF`）… **f = Facial**
+  - `.msrt`（magic `MSRT`）… **t = Transform**（Pos/Rot/Scale）
+  - `.msrc`（magic `MSRC`）… **c = Camera**（Transform＋FOV。旧モーション `.msrc` の名前を転用）
+  - 将来：DMX 等も `msr` ＋種別文字で拡張。
 - 出力名：`<キャラ名>_<yyyyMMdd_HHmmss>.msrm` / `.msrf`（衝突時 `_<index>` 付与）。
 
 ## 5. `.msrf` フォーマット（表情・新規）
@@ -132,7 +136,7 @@
 
 ## 11. 将来
 
-- Camera / Transform ストリームの実装（dropdown は先行追加済み）。
+- 直再生器（各ストリームを Transform / SMR / Camera へ直接適用）。
 - DMX ストリーム。
 - 全ストリーム共通タイムコード同期の高度化。
 - `.msrm` / `.msrf` 直再生器、`.anim` キーフレーム削減（段2）。

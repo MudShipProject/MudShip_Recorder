@@ -4,32 +4,34 @@ All notable changes to this package will be documented in this file.
 
 ## [0.4.0] - 2026-06-26
 
-録画系を `MS_Recorder`（マスター）へ再設計し、表情（BlendShape）ストリームを追加。
+録画系を `MS_Recorder`（マスター）へ再設計し、Motion / Facial / Transform / Camera の各ストリームを追加。
 設定はすべて `MS_Recorder` のスロット（シーン）に保持する。詳細設計は `Documentation~/recorder-architecture.md`。
 
 ### Added
+- **`MS_Recorder`（MonoBehaviour）**：録画スロットのリスト＋録画ボタン。各スロットに種別
+  （`Type` = Character/Transform/Camera）・出力先・Settings（fps/chunk/pool）・シーン配線をすべて持つ
+  （設定はシーンに保存。ScriptableObject は使わない）。録画開始時の共通 `startTime` で全ストリームを同期。
 - **表情記録**：`MsrfFormat`（`.msrf`）/ `FaceDefinition` / `FaceRecorderSession`。
   指定 `SkinnedMeshRenderer` 群の全 BlendShape ウェイトを GC フリーで記録。
-- **`MS_Recorder`（MonoBehaviour）**：録画スロットのリスト＋録画ボタン。各スロットに種別
-  （`Type` = Character/Camera/Transform）・出力先・Settings（fps/chunk/pool）・シーン配線をすべて持つ
-  （設定はシーンに保存。ScriptableObject は使わない）。Camera/Transform は枠のみ（未実装）。
-  Character スロットは 1 スロットで `.msrm`＋`.msrf` を同時出力。録画開始時の共通 `startTime` で同期。
+- **Transform 記録**：`MsrtFormat`（`.msrt`）/ `TransformRecorderSession`。対象 Transform の Pos/Rot/Scale。
+- **Camera 記録**：`MsrcFormat`（`.msrc`）/ `CameraRecorderSession`。Transform に加えて `fieldOfView`。
+- `IRecorderSession`：全セッション共通インターフェイス。`MS_Recorder` は種別を問わず統一して駆動する。
 - `ChunkedStreamWriter`：形式非依存の汎用チャンクライタ（旧 `MsrcStreamWriter` を抽出・共通化）。
-- `.msrf → .anim` 変換（SkinnedMeshRenderer の `blendShape.<名前>` カーブ）。
-- `SkeletonDefinition.Stride` 等は新形式に追従。
+- `.msrf`/`.msrt`/`.msrc → .anim` 変換（表情は `blendShape.<名前>`、Transform/Camera は対象自身の TRS、Camera は `field of view` も）。
 
 ### Changed
-- **（破壊的）拡張子・形式を改称**：`.msrc`/`MSRC`/`MsrcFormat` → `.msrm`/`MSRM`/`MsrmFormat`（m = Motion）。
-  体系：`msr` ＝ MudShip Recording、末尾 1 文字 ＝ ストリーム種別（m/f）。
+- **（破壊的）モーションの拡張子・形式を改称**：旧モーション `.msrc`/`MSRC`/`MsrcFormat` → `.msrm`/`MSRM`/`MsrmFormat`（m = Motion）。
+  体系：`msr` ＝ MudShip Recording、末尾 1 文字 ＝ ストリーム種別（**m**=Motion / **f**=Facial / **t**=Transform / **c**=Camera）。
+  ※ `.msrc`/`MSRC`/`MsrcFormat` の名前は新たに **Camera** ストリームへ転用（旧モーションの `.msrc` とは非互換）。
 - **（破壊的）`MotionRecorderBehaviour` を廃止**し `MS_Recorder` に統合（記録エンジンは再利用部品として存続）。
-  録画設定はシーンの Targets から SO プロファイル＋スロットへ再編。既存シーンは作り直しになる。
-- `.anim` 変換メニューを **Assets ▸ MudShip ▸ Convert recording to .anim**（`.msrm`/`.msrf` 両対応）に統合。
+  録画設定はシーンの Targets からスロットへ再編。既存シーンは作り直しになる。
+- `.anim` 変換メニューを **Assets ▸ MudShip ▸ Convert recording to .anim**（`.msrm`/`.msrf`/`.msrt`/`.msrc` 対応）に統合。
   **複数選択をまとめて変換可能**にし、保存先ポップアップを廃止（元ファイルと同じフォルダへ出力。表情は `_face` 付与）。
-- `MS_Recorder` インスペクタ UI を整理（スロットをカード／折りたたみ表示、Motion/Facial のセクション分け、余白調整）。
+- `MS_Recorder` インスペクタ UI を整理（スロットをカード／折りたたみ表示、種別ごとのフィールド出し分け、余白調整）。
 - 録画中はインスペクタのスロット描画をスキップし、状態表示の再描画を ~10Hz に間引き（録画開始時のフレームレート低下を解消）。
 
 ### Removed
-- 旧 `.msrc` 形式（`MSRC`）。旧 `.msrc` ファイルは新コンバータでは読めない。
+- 旧モーション `.msrc` 形式。旧 `.msrc`（モーション）ファイルは新コンバータでは読めない（現在の `.msrc` は Camera 用）。
 
 ## [0.3.0] - 2026-06-26
 
