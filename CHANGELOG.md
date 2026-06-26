@@ -37,6 +37,7 @@ All notable changes to this package will be documented in this file.
 - `ChunkedStreamWriter.WriteFrames`：複数フレームを一括書き込みするバルク API（音声用）。
 - **ファイル命名のカスタマイズ**：`MS_Recorder` に `Name Prefix`（全ファイル共通の接頭辞、`<Take>` トークン対応）と
   `Take`（番号、`<Take>` に 3 桁ゼロ詰めで展開）を追加。命名規則を **`(prefix)_(type)_(object)_(date)`** に統一。
+  Character の type 部分はファイルごとに **`Motion`（.msrm）/ `Facial`（.msrf）** で出し分ける。
 - **インスペクタ UI を ReorderableList 化**（ドラッグ並べ替え／＋－）。種別ごとに左端をカラー表示
   （Character=青 / Camera=橙 / Transform=緑 / Audio=紫）。各要素は**折りたたみ可**・**表示名（label）を編集可能**。
   カラーラインと折りたたみ三角の被りを解消。展開時は General / Motion / Facial 等のグループに分け、

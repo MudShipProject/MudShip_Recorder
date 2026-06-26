@@ -172,16 +172,17 @@ namespace MudShip.MotionRecorder
 
             string dir = slot.ResolveOutputDirectory();
             var settings = slot.settings;
-            string fileBase = UniqueName(BuildFileBase("Character", animator.gameObject.name, stamp), usedNames);
+            string objectName = animator.gameObject.name;
 
-            // モーション (.msrm)
+            // モーション (.msrm) — type 部分は "Motion"
             var skeleton = SkeletonDefinition.FromAnimator(animator, slot.hipBone, slot.addBones);
             WarnPositionBones(animator, slot, skeleton);
             var motion = new MotionRecorderSession(skeleton, settings);
-            motion.Start(Path.Combine(dir, fileBase + MsrmFormat.Extension));
+            string motionBase = UniqueName(BuildFileBase("Motion", objectName, stamp), usedNames);
+            motion.Start(Path.Combine(dir, motionBase + MsrmFormat.Extension));
             _sessions.Add(motion);
 
-            // 表情 (.msrf) — SMR 指定があるときのみ
+            // 表情 (.msrf) — type 部分は "Facial"。SMR 指定があるときのみ
             if (slot.faceRenderers != null && slot.faceRenderers.Count > 0)
             {
                 var face = FaceDefinition.FromRenderers(animator.transform, slot.faceRenderers);
@@ -189,7 +190,8 @@ namespace MudShip.MotionRecorder
                 if (!face.IsEmpty)
                 {
                     var faceSession = new FaceRecorderSession(face, settings);
-                    faceSession.Start(Path.Combine(dir, fileBase + MsrfFormat.Extension));
+                    string faceBase = UniqueName(BuildFileBase("Facial", objectName, stamp), usedNames);
+                    faceSession.Start(Path.Combine(dir, faceBase + MsrfFormat.Extension));
                     _sessions.Add(faceSession);
                 }
             }

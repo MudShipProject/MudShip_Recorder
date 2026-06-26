@@ -42,7 +42,7 @@ Transform / DMX など他ストリームの記録にも拡張予定。
 2. （任意）**Name Prefix** に全ファイル共通の接頭辞を入力（`<Take>` でテイク番号を 3 桁ゼロ詰め展開）、**Take** にテイク番号。
 3. **スロットを追加**し、`Type` を選んで対象（Character なら `Animator` 等、Camera/Transform なら Target、Audio なら Device）を設定。
 4. **プレイモードに入り**、Inspector の「● 録画開始」→「■ 停止」。
-5. **`(prefix)_(type)_(object)_(date).<ext>`** 形式で出力先（既定 `persistentDataPath/MudShipRecordings`）に保存される。例: `Shoot003_Camera_MainCamera_20260627_153012.msrc`。出力先がプロジェクト（Assets 配下）なら停止時に自動 `AssetDatabase.Refresh()`。
+5. **`(prefix)_(type)_(object)_(date).<ext>`** 形式で出力先（既定 `persistentDataPath/MudShipRecordings`）に保存される。例: `Shoot003_Camera_MainCamera_20260627_153012.msrc`。Character は **`Motion`（.msrm）と `Facial`（.msrf）** に type が分かれる。出力先がプロジェクト（Assets 配下）なら停止時に自動 `AssetDatabase.Refresh()`。
 
 ## 使い方（コードから）
 
