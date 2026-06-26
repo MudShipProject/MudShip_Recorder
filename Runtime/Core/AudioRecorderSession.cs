@@ -28,6 +28,7 @@ namespace MudShip.MotionRecorder
         float[] _floatBuf;
         byte[] _byteBuf;
         bool _micStarted;
+        float _peak; // 診断用: 記録中の最大振幅
 
         public string FilePath { get; private set; }
         public bool IsRecording { get; private set; }
@@ -86,6 +87,9 @@ namespace MudShip.MotionRecorder
 
             FilePath = filePath;
             IsRecording = true;
+
+            Debug.Log($"[MS_Recorder][Audio] 開始: device='{_device}', {_sampleRate}Hz, {_channels}ch, ring={_clipFrames} frames" +
+                      (Microphone.IsRecording(_device) ? "" : "  ※Microphone.IsRecording=false（録音が始まっていない可能性）"));
         }
 
         public void CaptureFrame(double timestamp)
@@ -122,6 +126,15 @@ namespace MudShip.MotionRecorder
                     _micStarted = false;
                 }
                 _writer.Finish();
+
+                double sec = _sampleRate > 0 ? (double)FrameCount / _sampleRate : 0;
+                Debug.Log($"[MS_Recorder][Audio] 停止: {FrameCount} frames ({sec:F2}s), peak={_peak:F4}, device='{_device}'");
+                if (FrameCount == 0)
+                    Debug.LogWarning("[MS_Recorder][Audio] サンプルが 0 でした。デバイスから信号が来ていません。" +
+                                     "Windows のマイク権限（デスクトップアプリの許可）、Windows サウンド設定での録音デバイス有効化/レベル、" +
+                                     "インターフェースが WASAPI 録音デバイスとして見えているか（ASIO 専用だと Unity からは録れない）を確認してください。");
+                else if (_peak <= 0f)
+                    Debug.LogWarning("[MS_Recorder][Audio] 無音（peak=0）でした。入力ソース/チャンネル/ゲイン、権限を確認してください。");
             }
         }
 
@@ -175,7 +188,11 @@ namespace MudShip.MotionRecorder
             int count = frames * _channels;
             for (int i = 0; i < count; i++)
             {
-                int v = (int)(Mathf.Clamp(fbuf[i], -1f, 1f) * 32767f);
+                float f = fbuf[i];
+                float a = f < 0f ? -f : f;
+                if (a > _peak) _peak = a;
+
+                int v = (int)(Mathf.Clamp(f, -1f, 1f) * 32767f);
                 bbuf[i * 2] = (byte)v;
                 bbuf[i * 2 + 1] = (byte)(v >> 8);
             }
