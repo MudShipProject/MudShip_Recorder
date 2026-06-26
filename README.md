@@ -33,6 +33,8 @@ Transform / DMX など他ストリームの記録にも拡張予定。
 - Transform / Camera は **`Record Space`** で記録空間を選択：
   - `World`（既定）… `position` / `rotation` / `lossyScale`。**親（リグ/ドリー）の下にあるカメラ等はこちら**。`.anim` は親なしオブジェクトに適用する前提。
   - `Local` … `localPosition` / `localRotation` / `localScale`。同じ親構造に適用する用途向け。
+- **`Audio`**：`Audio Device`（PC の入力デバイス）を選んで PCM を記録（`.msra`、16-bit）。`Sample Rate` で軽量化も可。
+  - Unity が録れるのは**入力デバイス**（マイク／ライン／オーディオ I/F）のみ。**PC の再生音（システム出力）を録るには仮想オーディオケーブル（VB-Audio Cable 等）**が必要（入れると入力デバイスとして選べる）。
 
 ## 使い方（コンポーネント）
 
@@ -71,11 +73,12 @@ facial.Stop(); facial.Dispose();
 録画したファイルを `AnimationClip` (.anim) に変換できる（オフライン後処理）。
 全フレームにキーを打つ**ロスレス**変換で、各フレーム時刻の値は元データと完全一致する。
 
-- Assets 内の `.msrm` / `.msrf` / `.msrt` / `.msrc` を**右クリック ▸ MudShip ▸ Convert recording to .anim**（**複数選択可**。元ファイルと同じフォルダに出力）。
-  - `.msrm` → Transform パスの `localRotation` / `localPosition` カーブ。
+- Assets 内の `.msrm` / `.msrf` / `.msrt` / `.msrc` / `.msra` を**右クリック ▸ MudShip ▸ Convert recording**（**複数選択可**。元ファイルと同じフォルダに出力）。
+  - `.msrm` → Transform パスの `localRotation` / `localPosition` カーブ（.anim）。
   - `.msrf` → SkinnedMeshRenderer パスの `blendShape.<名前>` カーブ（`_face` 付きで出力）。
   - `.msrt` → 対象自身（path 空）の `localPosition` / `localRotation` / `localScale` カーブ。
   - `.msrc` → 上記に加え `Camera` の `field of view` カーブ。
+  - `.msra` → **`.wav`**（音声は AnimationClip ではなく WAV を書き出す）。
 
 記録時と同じ構造（Character は root 相対パス、Transform/Camera は対象 GameObject 自身）に適用する前提
 （リターゲット不可）。尺が長いとキー数が多く重くなる点に注意（軽量化＝キーフレーム削減は今後対応）。
@@ -90,13 +93,14 @@ facial.Stop(); facial.Dispose();
 | `FaceRecorderSession` | SMR 群 → 1 `.msrf` の記録エンジン。 |
 | `TransformRecorderSession` | 1 Transform → 1 `.msrt`（Pos/Rot/Scale）。 |
 | `CameraRecorderSession` | 1 Camera → 1 `.msrc`（Pos/Rot/Scale＋FOV）。 |
+| `AudioRecorderSession` | 入力デバイス → 1 `.msra`（PCM 16-bit）。 |
 | `SkeletonDefinition` / `FaceDefinition` | モーション／表情の記録対象定義。 |
 | `RecorderSettings` | fps・チャンクサイズ・プール数の設定。 |
-| `MsrmFormat` / `MsrfFormat` / `MsrtFormat` / `MsrcFormat` | 各フォーマット定数とレイアウト仕様。 |
+| `MsrmFormat` / `MsrfFormat` / `MsrtFormat` / `MsrcFormat` / `MsraFormat` | 各フォーマット定数とレイアウト仕様。 |
 
 ## ファイル形式
 
-`msr` = MudShip Recording、末尾 1 文字 = ストリーム種別（**m** = Motion / **f** = Facial / **t** = Transform / **c** = Camera）。
+`msr` = MudShip Recording、末尾 1 文字 = ストリーム種別（**m** = Motion / **f** = Facial / **t** = Transform / **c** = Camera / **a** = Audio）。
 リトルエンディアン、固定ストライド。詳細は各 `Msr*Format.cs` の doc コメント参照。
 
 ```
@@ -115,6 +119,10 @@ facial.Stop(); facial.Dispose();
 
 .msrc  [Header] magic"MSRC" / version u16 / flags u32 / nominalFps f32 / frameCount u32
        [Frames] timestamp f64 / pos (f32x3) / rot (f32x4) / scale (f32x3) / fov f32
+
+.msra  [Header] magic"MSRA" / version u16 / flags u32 / sampleRate u32 / channels u16 /
+                bitsPerSample u16 / startOffset f64 / sampleFrameCount u32
+       [Data]   PCM int16 interleaved（× sampleFrameCount × channels）
 ```
 
 詳細な設計は [`Documentation~/recorder-architecture.md`](Documentation~/recorder-architecture.md) を参照。

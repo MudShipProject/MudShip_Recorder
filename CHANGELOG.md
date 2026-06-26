@@ -17,6 +17,10 @@ All notable changes to this package will be documented in this file.
 - **Camera 記録**：`MsrcFormat`（`.msrc`）/ `CameraRecorderSession`。Transform に加えて `fieldOfView`。
 - Transform / Camera に **`Record Space`（World / Local）** を追加。World は `position/rotation/lossyScale` を記録し、
   親（リグ/ドリー）の下のカメラでもワールドの動きを取りこぼさない（既定 World）。形式に `FlagWorldSpace` を追加。
+- **音声記録**：`MsraFormat`（`.msra`）/ `AudioRecorderSession`。入力デバイス（`Microphone.devices` から選択）の
+  PCM を 16-bit で記録（サンプルレート指定可）。`.msra → .wav` 変換に対応。
+  ※ Unity が録れるのは入力デバイスのみ。システム再生音は仮想オーディオケーブル経由で入力として録る。
+- `ChunkedStreamWriter.WriteFrames`：複数フレームを一括書き込みするバルク API（音声用）。
 - `IRecorderSession`：全セッション共通インターフェイス。`MS_Recorder` は種別を問わず統一して駆動する。
 - `ChunkedStreamWriter`：形式非依存の汎用チャンクライタ（旧 `MsrcStreamWriter` を抽出・共通化）。
 - `.msrf`/`.msrt`/`.msrc → .anim` 変換（表情は `blendShape.<名前>`、Transform/Camera は対象自身の TRS、Camera は `field of view` も）。
@@ -27,7 +31,7 @@ All notable changes to this package will be documented in this file.
   ※ `.msrc`/`MSRC`/`MsrcFormat` の名前は新たに **Camera** ストリームへ転用（旧モーションの `.msrc` とは非互換）。
 - **（破壊的）`MotionRecorderBehaviour` を廃止**し `MS_Recorder` に統合（記録エンジンは再利用部品として存続）。
   録画設定はシーンの Targets からスロットへ再編。既存シーンは作り直しになる。
-- `.anim` 変換メニューを **Assets ▸ MudShip ▸ Convert recording to .anim**（`.msrm`/`.msrf`/`.msrt`/`.msrc` 対応）に統合。
+- 変換メニューを **Assets ▸ MudShip ▸ Convert recording** に統合（`.msrm`/`.msrf`/`.msrt`/`.msrc` → `.anim`、`.msra` → `.wav`）。
   **複数選択をまとめて変換可能**にし、保存先ポップアップを廃止（元ファイルと同じフォルダへ出力。表情は `_face` 付与）。
 - `MS_Recorder` インスペクタ UI を整理（スロットをカード／折りたたみ表示、種別ごとのフィールド出し分け、余白調整）。
 - 録画中はインスペクタのスロット描画をスキップし、状態表示の再描画を ~10Hz に間引き（録画開始時のフレームレート低下を解消）。

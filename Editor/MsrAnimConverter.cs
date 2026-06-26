@@ -20,7 +20,7 @@ namespace MudShip.MotionRecorder.Editor
     {
         // ---- メニュー: Assets 内で選択した .msrm/.msrf を右クリック変換 (複数選択可) ----
 
-        [MenuItem("Assets/MudShip/Convert recording to .anim", true)]
+        [MenuItem("Assets/MudShip/Convert recording", true)]
         static bool ConvertSelectedValidate()
         {
             foreach (string guid in Selection.assetGUIDs)
@@ -29,7 +29,7 @@ namespace MudShip.MotionRecorder.Editor
             return false;
         }
 
-        [MenuItem("Assets/MudShip/Convert recording to .anim", false, 2000)]
+        [MenuItem("Assets/MudShip/Convert recording", false, 2000)]
         static void ConvertSelected()
         {
             string projectRoot = Path.GetDirectoryName(Application.dataPath); // .../<Project>
@@ -76,7 +76,7 @@ namespace MudShip.MotionRecorder.Editor
 
             if (!string.IsNullOrEmpty(lastOut))
             {
-                var saved = AssetDatabase.LoadAssetAtPath<AnimationClip>(lastOut);
+                var saved = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(lastOut);
                 if (saved != null)
                 {
                     EditorGUIUtility.PingObject(saved);
@@ -84,7 +84,7 @@ namespace MudShip.MotionRecorder.Editor
                 }
             }
 
-            Debug.Log($"[MudShip Recorder] {success}/{targets.Count} 件を .anim に変換しました。");
+            Debug.Log($"[MudShip Recorder] {success}/{targets.Count} 件を変換しました。");
         }
 
         static bool IsSupported(string path)
@@ -92,17 +92,30 @@ namespace MudShip.MotionRecorder.Editor
             && (path.EndsWith(MsrmFormat.Extension, StringComparison.OrdinalIgnoreCase)
              || path.EndsWith(MsrfFormat.Extension, StringComparison.OrdinalIgnoreCase)
              || path.EndsWith(MsrtFormat.Extension, StringComparison.OrdinalIgnoreCase)
-             || path.EndsWith(MsrcFormat.Extension, StringComparison.OrdinalIgnoreCase));
+             || path.EndsWith(MsrcFormat.Extension, StringComparison.OrdinalIgnoreCase)
+             || path.EndsWith(MsraFormat.Extension, StringComparison.OrdinalIgnoreCase));
 
-        // ---- 変換本体 (元ファイルと同じフォルダへ .anim を出力。保存先ポップアップは出さない) ----
+        // ---- 変換本体 (元ファイルと同じフォルダへ出力。保存先ポップアップは出さない) ----
 
-        /// <summary>1 つの .msrm/.msrf アセットを変換し、同じフォルダに .anim を作って保存先パスを返す。</summary>
+        /// <summary>1 つの録画ファイルを変換し、同じフォルダに成果物 (.anim / .wav) を作って保存先パスを返す。</summary>
         static string ConvertAsset(string assetPath, string projectRoot)
         {
             string fullPath = Path.Combine(projectRoot, assetPath);
             string ext = Path.GetExtension(assetPath);
-
             var oic = StringComparison.OrdinalIgnoreCase;
+
+            // 音声は AnimationClip ではなく .wav を直接書き出す。
+            if (ext.Equals(MsraFormat.Extension, oic))
+            {
+                byte[] wav = BuildWav(fullPath);
+                string wavPath = AssetDatabase.GenerateUniqueAssetPath(
+                    Path.Combine(Path.GetDirectoryName(assetPath),
+                        Path.GetFileNameWithoutExtension(assetPath) + ".wav").Replace('\\', '/'));
+                File.WriteAllBytes(Path.Combine(projectRoot, wavPath), wav);
+                AssetDatabase.ImportAsset(wavPath);
+                return wavPath;
+            }
+
             AnimationClip clip;
             string suffix = "";
             if (ext.Equals(MsrmFormat.Extension, oic))
@@ -380,6 +393,75 @@ namespace MudShip.MotionRecorder.Editor
             clip.SetCurve("", typeof(Camera), "field of view", BuildLinearCurve(times, fov));
             clip.EnsureQuaternionContinuity();
             return clip;
+        }
+
+        // ---- .msra (Audio) → WAV ------------------------------------------------
+
+        static byte[] BuildWav(string msraPath)
+        {
+            using var fs = new FileStream(msraPath, FileMode.Open, FileAccess.Read, FileShare.Read);
+            using var br = new BinaryReader(fs);
+
+            byte[] magic = br.ReadBytes(4);
+            if (magic.Length != 4 || magic[0] != 'M' || magic[1] != 'S' || magic[2] != 'R' || magic[3] != 'A')
+                throw new InvalidDataException("MSRA マジックが一致しません。.msra ファイルではない可能性があります。");
+
+            ushort version = br.ReadUInt16();
+            uint flags = br.ReadUInt32();
+            int sampleRate = (int)br.ReadUInt32();
+            int channels = br.ReadUInt16();
+            int bits = br.ReadUInt16();
+            double startOffset = br.ReadDouble();
+            uint headerFrameCount = br.ReadUInt32();
+
+            int stride = channels * (bits / 8);
+            if (stride <= 0)
+                throw new InvalidDataException("不正なチャンネル/ビット深度です。");
+
+            long dataStart = fs.Position;
+            long dataBytes = fs.Length - dataStart;
+            int framesFromSize = (int)(dataBytes / stride);
+            int frames = headerFrameCount > 0 ? Mathf.Min((int)headerFrameCount, framesFromSize) : framesFromSize;
+            if (frames <= 0)
+                throw new InvalidDataException("有効なサンプルがありません。");
+
+            int pcmBytes = frames * stride;
+            byte[] pcm = br.ReadBytes(pcmBytes);
+
+            return WavBytes(pcm, sampleRate, channels, bits);
+        }
+
+        static byte[] WavBytes(byte[] pcm, int sampleRate, int channels, int bits)
+        {
+            int blockAlign = channels * (bits / 8);
+            int byteRate = sampleRate * blockAlign;
+            int dataLen = pcm.Length;
+
+            using var ms = new MemoryStream(44 + dataLen);
+            using var bw = new BinaryWriter(ms);
+
+            WriteTag(bw, "RIFF");
+            bw.Write(36 + dataLen);
+            WriteTag(bw, "WAVE");
+            WriteTag(bw, "fmt ");
+            bw.Write(16);                  // PCM fmt chunk size
+            bw.Write((short)1);            // audio format = PCM
+            bw.Write((short)channels);
+            bw.Write(sampleRate);
+            bw.Write(byteRate);
+            bw.Write((short)blockAlign);
+            bw.Write((short)bits);
+            WriteTag(bw, "data");
+            bw.Write(dataLen);
+            bw.Write(pcm);
+            bw.Flush();
+            return ms.ToArray();
+        }
+
+        static void WriteTag(BinaryWriter bw, string tag)
+        {
+            for (int i = 0; i < tag.Length; i++)
+                bw.Write((byte)tag[i]);
         }
 
         // ---- 共通 ---------------------------------------------------------------

@@ -172,8 +172,36 @@ namespace MudShip.MotionRecorder.Editor
                     EditorGUILayout.PropertyField(slot.FindPropertyRelative("cameraTarget"), new GUIContent("Camera Target"));
                     EditorGUILayout.PropertyField(slot.FindPropertyRelative("space"), new GUIContent("Record Space"));
                 }
+                else if (typeIndex == (int)MS_Recorder.RecorderType.Audio)
+                {
+                    EditorGUILayout.Space(4);
+                    EditorGUILayout.LabelField("Audio（入力ソース）", EditorStyles.miniBoldLabel);
+                    DrawAudioDevice(slot.FindPropertyRelative("audioDevice"));
+                    EditorGUILayout.PropertyField(slot.FindPropertyRelative("audioSampleRate"), new GUIContent("Sample Rate (Hz)"));
+                }
 
                 EditorGUI.indentLevel--;
+            }
+        }
+
+        static void DrawAudioDevice(SerializedProperty deviceProp)
+        {
+            string[] devices = Microphone.devices;
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                if (devices == null || devices.Length == 0)
+                {
+                    EditorGUILayout.LabelField("Audio Device", "（入力デバイスなし）");
+                }
+                else
+                {
+                    int cur = Mathf.Max(0, System.Array.IndexOf(devices, deviceProp.stringValue));
+                    int sel = EditorGUILayout.Popup("Audio Device", cur, devices);
+                    if (sel >= 0 && sel < devices.Length)
+                        deviceProp.stringValue = devices[sel];
+                }
+                // Microphone.devices は毎描画で取得されるため、クリックで再描画＝更新になる。
+                GUILayout.Button("更新", GUILayout.Width(48));
             }
         }
 
@@ -212,6 +240,10 @@ namespace MudShip.MotionRecorder.Editor
             added.FindPropertyRelative("hipBone").objectReferenceValue = null;
             added.FindPropertyRelative("addBones").ClearArray();
             added.FindPropertyRelative("faceRenderers").ClearArray();
+            added.FindPropertyRelative("transformTarget").objectReferenceValue = null;
+            added.FindPropertyRelative("cameraTarget").objectReferenceValue = null;
+            added.FindPropertyRelative("audioDevice").stringValue = "";
+            added.FindPropertyRelative("audioSampleRate").intValue = 48000;
         }
 
         // ---- 録画ボタン・状態 ----------------------------------------------------

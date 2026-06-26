@@ -112,6 +112,30 @@ namespace MudShip.MotionRecorder
                 RotateChunk();
         }
 
+        /// <summary>
+        /// 複数フレーム分のバイト列をまとめて書き込む（音声などストリーム的なデータ用）。
+        /// <paramref name="src"/> の長さは stride の整数倍であること。チャンク境界をまたいでコピーする。
+        /// </summary>
+        public void WriteFrames(ReadOnlySpan<byte> src)
+        {
+            if (_faulted || _finished || src.Length == 0)
+                return;
+
+            int srcOff = 0;
+            while (srcOff < src.Length)
+            {
+                int space = _chunkBytes - _pos;
+                int n = Math.Min(space, src.Length - srcOff);
+                src.Slice(srcOff, n).CopyTo(_cur.AsSpan(_pos, n));
+                _pos += n;
+                srcOff += n;
+                if (_pos == _chunkBytes)
+                    RotateChunk();
+            }
+
+            _frameCount += src.Length / _stride;
+        }
+
         /// <summary>記録を確定し、IO スレッドを終了させ、ヘッダの frameCount を書き戻す。</summary>
         public void Finish()
         {

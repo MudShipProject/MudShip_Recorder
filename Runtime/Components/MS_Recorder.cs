@@ -23,6 +23,7 @@ namespace MudShip.MotionRecorder
             Character,
             Camera,
             Transform,
+            Audio,
         }
 
         /// <summary>Transform / Camera の記録空間。</summary>
@@ -67,6 +68,12 @@ namespace MudShip.MotionRecorder
 
             [Tooltip("[Transform / Camera] 記録する空間。\nWorld = 親の影響込みのワールド値（position/rotation/lossyScale）。リグ/ドリーの下のカメラはこちら。\nLocal = 親基準のローカル値（localPosition 等）。")]
             public RecordSpace space = RecordSpace.World;
+
+            [Tooltip("[Audio タイプ] 録音する入力デバイス名（Microphone.devices）。空なら既定の先頭デバイス。\nPC の再生音を録るには仮想オーディオケーブル等が必要。")]
+            public string audioDevice = "";
+
+            [Tooltip("[Audio タイプ] サンプルレート(Hz)。デバイス対応範囲にクランプ。0/既定は 48000。音合わせ用途なら下げて軽量化も可。")]
+            public int audioSampleRate = 48000;
 
             /// <summary>実際の出力先フォルダを解決する。</summary>
             public string ResolveOutputDirectory()
@@ -141,6 +148,7 @@ namespace MudShip.MotionRecorder
                 case RecorderType.Character: StartCharacter(slot, index, stamp, usedNames); break;
                 case RecorderType.Transform: StartTransform(slot, index, stamp, usedNames); break;
                 case RecorderType.Camera: StartCamera(slot, index, stamp, usedNames); break;
+                case RecorderType.Audio: StartAudio(slot, index, stamp, usedNames); break;
             }
         }
 
@@ -209,6 +217,17 @@ namespace MudShip.MotionRecorder
 
             var session = new CameraRecorderSession(cam, slot.settings, slot.space == RecordSpace.World);
             session.Start(Path.Combine(dir, fileBase + MsrcFormat.Extension));
+            _sessions.Add(session);
+        }
+
+        void StartAudio(Slot slot, int index, string stamp, HashSet<string> usedNames)
+        {
+            string dir = slot.ResolveOutputDirectory();
+            string label = string.IsNullOrEmpty(slot.audioDevice) ? "Audio" : slot.audioDevice;
+            string fileBase = UniqueName($"{MakeSafeFileName(label)}_{stamp}", usedNames);
+
+            var session = new AudioRecorderSession(slot.audioDevice, slot.audioSampleRate, slot.settings);
+            session.Start(Path.Combine(dir, fileBase + MsraFormat.Extension));
             _sessions.Add(session);
         }
 
