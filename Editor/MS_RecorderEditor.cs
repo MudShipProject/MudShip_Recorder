@@ -111,9 +111,9 @@ namespace MudShip.MotionRecorder.Editor
             int t = typeProp.enumValueIndex;
 
             float line = EditorGUIUtility.singleLineHeight;
-            float sp = 4f;        // 行間（詰まり過ぎ対策で広め）
-            float padTop = 5f;
-            float padBottom = 7f;
+            float sp = 5f;        // 行間
+            float padTop = 6f;
+            float padBottom = 8f;
             float stripW = 3f;
             float gap = 16f;      // カラーラインと内容の間隔（三角との被り対策）
 
@@ -166,13 +166,31 @@ namespace MudShip.MotionRecorder.Editor
                 if (draw) EditorGUI.PropertyField(r, p, true);
             }
 
-            // Type
+            void Gap(float h) { y += h; }
+
+            // グループの区切り（薄い線＋見出し＋前後の余白）
+            void Group(string title)
+            {
+                Gap(8f);
+                if (draw)
+                {
+                    var sepR = new Rect(x, y, w, 1f);
+                    EditorGUI.DrawRect(sepR, new Color(1f, 1f, 1f, 0.08f));
+                }
+                y += 1f;
+                Gap(4f);
+                var hr = Row(line);
+                if (draw) EditorGUI.LabelField(hr, title, EditorStyles.miniBoldLabel);
+                Gap(1f);
+            }
+
+            Gap(4f);
+
+            // --- General ---
             {
                 var r = Row(line);
                 if (draw) EditorGUI.PropertyField(r, typeProp, new GUIContent("Type"));
             }
-
-            // Output Directory + 参照
             {
                 var r = Row(line);
                 if (draw)
@@ -185,33 +203,39 @@ namespace MudShip.MotionRecorder.Editor
                     if (GUI.Button(b, "参照…")) BrowseOutputDirectory(outProp);
                 }
             }
-
             Prop("settings");
 
             if (t == (int)MS_Recorder.RecorderType.Character)
             {
+                Group("Motion");
                 Prop("animator");
                 Prop("hipBone");
                 Prop("addBones");
+
+                Group("Facial");
                 Prop("faceRenderers");
             }
             else if (t == (int)MS_Recorder.RecorderType.Transform)
             {
+                Group("Transform");
                 Prop("transformTarget");
                 Prop("space");
             }
             else if (t == (int)MS_Recorder.RecorderType.Camera)
             {
+                Group("Camera");
                 Prop("cameraTarget");
                 Prop("space");
             }
             else if (t == (int)MS_Recorder.RecorderType.Audio)
             {
+                Group("Audio");
                 var r = Row(line);
                 if (draw) DrawAudioDeviceRect(r, el.FindPropertyRelative("audioDevice"));
                 Prop("audioSampleRate");
             }
 
+            Gap(2f);
             return (y - rect.y) + padBottom - sp;
         }
 
