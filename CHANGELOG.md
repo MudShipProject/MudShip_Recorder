@@ -4,16 +4,16 @@ All notable changes to this package will be documented in this file.
 
 ## [0.4.0] - 2026-06-26
 
-録画系を `MS_Recorder`（マスター）＋ `MS_RecorderSettings`（プロファイル SO）へ再設計し、
-表情（BlendShape）ストリームを追加。詳細設計は `Documentation~/recorder-architecture.md`。
+録画系を `MS_Recorder`（マスター）へ再設計し、表情（BlendShape）ストリームを追加。
+設定はすべて `MS_Recorder` のスロット（シーン）に保持する。詳細設計は `Documentation~/recorder-architecture.md`。
 
 ### Added
 - **表情記録**：`MsrfFormat`（`.msrf`）/ `FaceDefinition` / `FaceRecorderSession`。
   指定 `SkinnedMeshRenderer` 群の全 BlendShape ウェイトを GC フリーで記録。
-- **`MS_Recorder`（MonoBehaviour）**：録画スロット（プロファイル＋シーン配線）のリスト＋録画ボタン。
-  Character スロットは 1 プロファイルで `.msrm`＋`.msrf` を同時出力。録画開始時の共通 `startTime` で同期。
-- **`MS_RecorderSettings`（ScriptableObject）**：`Type`（Character/Camera/Transform）＋ Output Directory＋fps/chunk/pool。
-  Camera/Transform は枠のみ（未実装）。Create ▸ MudShip ▸ Recorder Settings。
+- **`MS_Recorder`（MonoBehaviour）**：録画スロットのリスト＋録画ボタン。各スロットに種別
+  （`Type` = Character/Camera/Transform）・出力先・Settings（fps/chunk/pool）・シーン配線をすべて持つ
+  （設定はシーンに保存。ScriptableObject は使わない）。Camera/Transform は枠のみ（未実装）。
+  Character スロットは 1 スロットで `.msrm`＋`.msrf` を同時出力。録画開始時の共通 `startTime` で同期。
 - `ChunkedStreamWriter`：形式非依存の汎用チャンクライタ（旧 `MsrcStreamWriter` を抽出・共通化）。
 - `.msrf → .anim` 変換（SkinnedMeshRenderer の `blendShape.<名前>` カーブ）。
 - `SkeletonDefinition.Stride` 等は新形式に追従。

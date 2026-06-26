@@ -20,26 +20,23 @@ Transform / DMX など他ストリームの記録にも拡張予定。
 
 ## 構成
 
-- **`MS_RecorderSettings`（ScriptableObject）= 再利用可能な設定プロファイル**
+- **`MS_Recorder`（シーンの MonoBehaviour）= スロットのリスト**。設定はすべてこのコンポーネント＝シーンに保存する（ScriptableObject は使わない）。各スロットが持つもの：
   - `Type`（`Character` / `Camera` / `Transform`。Camera・Transform は枠のみ・未実装）
-  - `Output Directory`（参照…ボタン付き） / `Nominal Fps` / `Chunk Bytes` / `Pooled Chunk Count`
-  - シーン参照は持たない（SO アセットはシーン参照を保存できないため）。
-- **`MS_Recorder`（シーンの MonoBehaviour）= スロットのリスト**
-  - 各スロット ＝ プロファイル（SO 参照）＋シーン配線。`Character` のとき次を表示：
+  - `Output Directory`（参照…ボタン付き） / `Settings`（`Nominal Fps` / `Chunk Bytes` / `Pooled Chunk Count`）
+  - `Character` のとき次のシーン参照を表示：
     - `Animator` … 記録対象
     - `Hip Bone` … `localPosition` を記録する腰ボーン（空なら Humanoid の Hips を自動採用）
     - `Add Bones` … 腰に加えて位置も記録する追加ボーン（ツイスト等。回転は全ボーンで記録）
     - `Face Renderers` … 表情を記録する `SkinnedMeshRenderer` 群（**Animator の GameObject 配下**にあること）
 
-`Character` スロットは 1 つのプロファイルで `.msrm`（モーション）＋ `.msrf`（表情）を同時に出力する。
+`Character` スロットは 1 つのスロットで `.msrm`（モーション）＋ `.msrf`（表情）を同時に出力する。
 
 ## 使い方（コンポーネント）
 
-1. **プロファイルを作成**：Project で右クリック ▸ **Create ▸ MudShip ▸ Recorder Settings**。`Type = Character`、出力先・fps 等を設定。
-2. シーンの GameObject に **MudShip ▸ MS Recorder**（`MS_Recorder`）を追加。
-3. **スロットを追加**し、`Settings (Profile)` に 1. の SO を割り当て、`Animator`（必要なら `Hip Bone` / `Add Bones` / `Face Renderers`）を設定。
-4. **プレイモードに入り**、Inspector の「● 録画開始」→「■ 停止」。
-5. `<キャラ名>_<stamp>.msrm` /（表情指定時）`.msrf` が出力先（既定 `persistentDataPath/MudShipRecordings`）に保存される。出力先がプロジェクト（Assets 配下）なら停止時に自動で `AssetDatabase.Refresh()` され取り込まれる。
+1. シーンの GameObject に **MudShip ▸ MS Recorder**（`MS_Recorder`）を追加。
+2. **スロットを追加**し、`Type = Character`、出力先・Settings、`Animator`（必要なら `Hip Bone` / `Add Bones` / `Face Renderers`）を設定。
+3. **プレイモードに入り**、Inspector の「● 録画開始」→「■ 停止」。
+4. `<キャラ名>_<stamp>.msrm` /（表情指定時）`.msrf` が出力先（既定 `persistentDataPath/MudShipRecordings`）に保存される。出力先がプロジェクト（Assets 配下）なら停止時に自動で `AssetDatabase.Refresh()` され取り込まれる。
 
 ## 使い方（コードから）
 
@@ -82,8 +79,7 @@ facial.Stop(); facial.Dispose();
 
 | 型 | 役割 |
 |---|---|
-| `MS_Recorder` | マスターコンポーネント。録画スロット（プロファイル＋シーン配線）リスト＋録画ボタン。 |
-| `MS_RecorderSettings` | 録画プロファイル（ScriptableObject）。type と Settings を保持。 |
+| `MS_Recorder` | マスターコンポーネント。録画スロット（種別・出力先・Settings・シーン配線）リスト＋録画ボタン。 |
 | `MotionRecorderSession` | 1 スケルトン → 1 `.msrm` の記録エンジン（MonoBehaviour 非依存）。 |
 | `FaceRecorderSession` | SMR 群 → 1 `.msrf` の記録エンジン（MonoBehaviour 非依存）。 |
 | `SkeletonDefinition` | root 全走査によるボーン列・パス・位置記録ボーンの定義。 |

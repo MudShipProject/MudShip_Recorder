@@ -13,3 +13,6 @@
 Thumbs.db
 *.tmp
 *~
+# ただし UPM の Documentation~ フォルダ (末尾 ~ だが同梱ドキュメント) は追跡する
+!Documentation~/
+!Documentation~/**

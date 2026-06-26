@@ -6,9 +6,8 @@ using UnityEngine;
 namespace MudShip.MotionRecorder
 {
     /// <summary>
-    /// 録画のマスターコンポーネント。<see cref="MS_RecorderSettings"/>（プロファイル）と、その
-    /// スロットごとのシーン配線（Animator・腰・追加ボーン・表情 SMR）をリストで保持し、録画開始で
-    /// 各スロットの全ストリームを生成・駆動する。
+    /// 録画のマスターコンポーネント。スロット（種別・出力先・Settings・シーン配線）のリストを保持し、
+    /// 録画開始で各スロットの全ストリームを生成・駆動する。設定はすべてこのコンポーネント＝シーンに保存する。
     ///
     /// 録画開始時に基準 startTime を 1 つ確定し、全ストリーム（.msrm / .msrf）へ同じ
     /// <c>Time.timeAsDouble - startTime</c> を渡す（＝共通タイムコード同期の土台）。録画中は
@@ -18,15 +17,28 @@ namespace MudShip.MotionRecorder
     [DisallowMultipleComponent]
     public class MS_Recorder : MonoBehaviour
     {
+        /// <summary>記録の種別。Camera / Transform は枠のみ（機能は後日）。</summary>
+        public enum RecorderType
+        {
+            Character,
+            Camera,
+            Transform,
+        }
+
         /// <summary>
-        /// 録画対象 1 件分のスロット。プロファイル（SO）＋そのキャラのシーン配線。
-        /// Character タイプのときに Animator 以下のフィールドを使う。
+        /// 録画対象 1 件分のスロット。種別・出力先・Settings・シーン配線をすべてここに持つ
+        /// （ScriptableObject は使わず、シーンに直接保存する）。Character タイプのとき Animator 以下を使う。
         /// </summary>
         [Serializable]
         public class Slot
         {
-            [Tooltip("録画プロファイル（type と Settings を持つ ScriptableObject）。")]
-            public MS_RecorderSettings settings;
+            [Tooltip("記録の種別。Character はモーション＋表情。Camera / Transform は未実装（枠のみ）。")]
+            public RecorderType type = RecorderType.Character;
+
+            [Tooltip("出力先フォルダ。空なら persistentDataPath/MudShipRecordings を使う。")]
+            public string outputDirectory = "";
+
+            public RecorderSettings settings = RecorderSettings.Default;
 
             [Tooltip("記録対象の Animator。Transform 以下を全走査して localRotation を記録する。")]
             public Animator animator;
@@ -39,6 +51,12 @@ namespace MudShip.MotionRecorder
 
             [Tooltip("表情を記録する SkinnedMeshRenderer 群（各 SMR の全 BlendShape を記録）。\nAnimator の GameObject 配下にあること。空なら表情は記録しない。")]
             public List<SkinnedMeshRenderer> faceRenderers = new List<SkinnedMeshRenderer>();
+
+            /// <summary>実際の出力先フォルダを解決する。</summary>
+            public string ResolveOutputDirectory()
+                => string.IsNullOrEmpty(outputDirectory)
+                    ? Path.Combine(Application.persistentDataPath, "MudShipRecordings")
+                    : outputDirectory;
         }
 
         [Tooltip("録画スロット一覧。各スロット = プロファイル（SO）＋シーン配線。")]
@@ -77,14 +95,15 @@ namespace MudShip.MotionRecorder
             string stamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
             var usedNames = new HashSet<string>();
 
-            foreach (var slot in _slots)
+            for (int i = 0; i < _slots.Count; i++)
             {
-                if (slot == null || slot.settings == null)
+                var slot = _slots[i];
+                if (slot == null)
                     continue;
 
                 try
                 {
-                    StartSlot(slot, stamp, usedNames);
+                    StartSlot(slot, i, stamp, usedNames);
                 }
                 catch (Exception e)
                 {
@@ -94,7 +113,7 @@ namespace MudShip.MotionRecorder
 
             if (_motion.Count == 0 && _face.Count == 0)
             {
-                Debug.LogWarning("[MS_Recorder] 記録対象が 1 つもありません。スロットに Character プロファイルと Animator を設定してください。", this);
+                Debug.LogWarning("[MS_Recorder] 記録対象が 1 つもありません。スロットに type=Character と Animator を設定してください。", this);
                 return;
             }
 
@@ -103,25 +122,23 @@ namespace MudShip.MotionRecorder
             RecordingStarted?.Invoke();
         }
 
-        void StartSlot(Slot slot, string stamp, HashSet<string> usedNames)
+        void StartSlot(Slot slot, int index, string stamp, HashSet<string> usedNames)
         {
-            var so = slot.settings;
-
-            if (so.Type != MS_RecorderSettings.RecorderType.Character)
+            if (slot.type != RecorderType.Character)
             {
-                Debug.Log($"[MS_Recorder] '{so.name}': type={so.Type} は未実装のためスキップします。", this);
+                Debug.Log($"[MS_Recorder] Slot {index + 1}: type={slot.type} は未実装のためスキップします。", this);
                 return;
             }
 
             var animator = slot.animator;
             if (animator == null)
             {
-                Debug.LogWarning($"[MS_Recorder] '{so.name}': Animator 未設定のためスキップします。", this);
+                Debug.LogWarning($"[MS_Recorder] Slot {index + 1}: Animator 未設定のためスキップします。", this);
                 return;
             }
 
-            string dir = so.ResolveOutputDirectory();
-            var settings = so.Settings;
+            string dir = slot.ResolveOutputDirectory();
+            var settings = slot.settings;
             string fileBase = UniqueName($"{MakeSafeFileName(animator.gameObject.name)}_{stamp}", usedNames);
 
             // モーション (.msrm)

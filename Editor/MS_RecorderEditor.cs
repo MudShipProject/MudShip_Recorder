@@ -5,8 +5,8 @@ using UnityEngine;
 namespace MudShip.MotionRecorder.Editor
 {
     /// <summary>
-    /// <see cref="MS_Recorder"/> 用のカスタムインスペクタ。スロットをカード表示し、参照中の
-    /// <see cref="MS_RecorderSettings"/> の type に応じてシーン参照フィールドを出し分ける。
+    /// <see cref="MS_Recorder"/> 用のカスタムインスペクタ。スロットをカード表示し、
+    /// スロットの type に応じてシーン参照フィールドを出し分ける。
     /// プレイモード中は録画開始/停止ボタンと各セッションの状態を表示する。
     /// </summary>
     [CustomEditor(typeof(MS_Recorder))]
@@ -110,8 +110,7 @@ namespace MudShip.MotionRecorder.Editor
         void DrawSlotCard(int i, ref int removeAt)
         {
             var slot = _slots.GetArrayElementAtIndex(i);
-            var settingsProp = slot.FindPropertyRelative("settings");
-            var so = settingsProp.objectReferenceValue as MS_RecorderSettings;
+            var typeProp = slot.FindPropertyRelative("type");
 
             using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
             {
@@ -120,10 +119,7 @@ namespace MudShip.MotionRecorder.Editor
                 {
                     slot.isExpanded = EditorGUILayout.Foldout(slot.isExpanded, $"Slot {i + 1}", true);
                     GUILayout.FlexibleSpace();
-
-                    string badge = so == null ? "プロファイル未設定" : $"{so.Type}";
-                    GUILayout.Label(badge, EditorStyles.miniLabel);
-
+                    GUILayout.Label(typeProp.enumDisplayNames[typeProp.enumValueIndex], EditorStyles.miniLabel);
                     if (GUILayout.Button("✕", GUILayout.Width(22)))
                         removeAt = i;
                 }
@@ -134,13 +130,22 @@ namespace MudShip.MotionRecorder.Editor
                 EditorGUILayout.Space(2);
                 EditorGUI.indentLevel++;
 
-                EditorGUILayout.PropertyField(settingsProp, new GUIContent("Settings (Profile)"));
+                EditorGUILayout.PropertyField(typeProp, new GUIContent("Type"));
 
-                if (so == null)
+                // 出力先 + 参照ボタン
+                var outDirProp = slot.FindPropertyRelative("outputDirectory");
+                using (new EditorGUILayout.HorizontalScope())
                 {
-                    EditorGUILayout.HelpBox("MS_RecorderSettings（プロファイル）を割り当ててください。", MessageType.Warning);
+                    EditorGUILayout.PropertyField(outDirProp, new GUIContent("Output Directory"));
+                    if (GUILayout.Button("参照…", GUILayout.Width(56)))
+                        BrowseOutputDirectory(outDirProp);
                 }
-                else if (so.Type == MS_RecorderSettings.RecorderType.Character)
+                if (string.IsNullOrEmpty(outDirProp.stringValue))
+                    EditorGUILayout.LabelField(" ", "未設定なら persistentDataPath/MudShipRecordings", EditorStyles.miniLabel);
+
+                EditorGUILayout.PropertyField(slot.FindPropertyRelative("settings"), new GUIContent("Settings"), true);
+
+                if (typeProp.enumValueIndex == (int)MS_Recorder.RecorderType.Character)
                 {
                     EditorGUILayout.Space(4);
                     EditorGUILayout.LabelField("Motion", EditorStyles.miniBoldLabel);
@@ -154,11 +159,27 @@ namespace MudShip.MotionRecorder.Editor
                 }
                 else
                 {
-                    EditorGUILayout.HelpBox($"type = {so.Type} は未実装です（枠のみ）。", MessageType.Info);
+                    EditorGUILayout.HelpBox(
+                        $"type = {typeProp.enumDisplayNames[typeProp.enumValueIndex]} は未実装です（枠のみ）。",
+                        MessageType.Info);
                 }
 
                 EditorGUI.indentLevel--;
             }
+        }
+
+        void BrowseOutputDirectory(SerializedProperty outputDirProp)
+        {
+            // プロジェクトのルート (Assets の親) を起点に開く。
+            string projectRoot = Path.GetDirectoryName(Application.dataPath);
+
+            string selected = EditorUtility.OpenFolderPanel("録画の出力先フォルダを選択", projectRoot, "");
+            if (string.IsNullOrEmpty(selected))
+                return; // キャンセル
+
+            outputDirProp.stringValue = selected;
+            serializedObject.ApplyModifiedProperties();
+            GUIUtility.ExitGUI(); // OpenFolderPanel 後のレイアウト不整合を防ぐ
         }
 
         void AddSlot()
@@ -166,10 +187,17 @@ namespace MudShip.MotionRecorder.Editor
             int idx = _slots.arraySize;
             _slots.InsertArrayElementAtIndex(idx);
 
-            // 直前要素のコピーになるため、参照を空にして新規スロットとして扱う。
+            // 直前要素のコピーになるため、新規スロットとして既定値にリセットする。
             var added = _slots.GetArrayElementAtIndex(idx);
             added.isExpanded = true;
-            added.FindPropertyRelative("settings").objectReferenceValue = null;
+            added.FindPropertyRelative("type").enumValueIndex = (int)MS_Recorder.RecorderType.Character;
+            added.FindPropertyRelative("outputDirectory").stringValue = "";
+
+            var st = added.FindPropertyRelative("settings");
+            st.FindPropertyRelative("NominalFps").floatValue = 60f;
+            st.FindPropertyRelative("ChunkBytes").intValue = 256 * 1024;
+            st.FindPropertyRelative("PooledChunkCount").intValue = 4;
+
             added.FindPropertyRelative("animator").objectReferenceValue = null;
             added.FindPropertyRelative("hipBone").objectReferenceValue = null;
             added.FindPropertyRelative("addBones").ClearArray();
