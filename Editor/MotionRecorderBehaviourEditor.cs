@@ -14,14 +14,12 @@ namespace MudShip.MotionRecorder.Editor
     {
         SerializedProperty _targets;
         SerializedProperty _outputDirectory;
-        SerializedProperty _includeRoot;
         SerializedProperty _settings;
 
         void OnEnable()
         {
             _targets = serializedObject.FindProperty("_targets");
             _outputDirectory = serializedObject.FindProperty("_outputDirectory");
-            _includeRoot = serializedObject.FindProperty("_includeRoot");
             _settings = serializedObject.FindProperty("_settings");
         }
 
@@ -66,7 +64,6 @@ namespace MudShip.MotionRecorder.Editor
             if (string.IsNullOrEmpty(_outputDirectory.stringValue))
                 EditorGUILayout.LabelField(" ", "未設定の場合は persistentDataPath/MotionRecordings を使用", EditorStyles.miniLabel);
 
-            EditorGUILayout.PropertyField(_includeRoot);
             EditorGUILayout.PropertyField(_settings, true);
 
             serializedObject.ApplyModifiedProperties();

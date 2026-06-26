@@ -33,8 +33,8 @@ namespace MudShip.MotionRecorder
             public Transform hipBone;
 
             [Tooltip("腰に加えて localPosition も記録する追加ボーン (ツイストボーン等)。\n" +
-                     "回転だけでなく位置も必要なボーンがあればここに指定する。通常は空でよい。")]
-            public List<Transform> positionBones = new List<Transform>();
+                     "localRotation は root 配下の全ボーンで記録されるので、ここに挙げると位置も加えて記録される。通常は空でよい。")]
+            public List<Transform> addBones = new List<Transform>();
         }
 
         [Tooltip("記録対象一覧。各 Animator の Transform 以下を全走査して記録する。")]
@@ -42,9 +42,6 @@ namespace MudShip.MotionRecorder
 
         [Tooltip("出力先フォルダ。空なら persistentDataPath/MotionRecordings を使う。")]
         [SerializeField] string _outputDirectory = "";
-
-        [Tooltip("root (Animator の Transform) 自身も記録対象に含めるか。通常 false。")]
-        [SerializeField] bool _includeRoot = false;
 
         [SerializeField] RecorderSettings _settings = RecorderSettings.Default;
 
@@ -91,7 +88,7 @@ namespace MudShip.MotionRecorder
 
                 try
                 {
-                    var skeleton = SkeletonDefinition.FromAnimator(animator, entry.hipBone, entry.positionBones, _includeRoot);
+                    var skeleton = SkeletonDefinition.FromAnimator(animator, entry.hipBone, entry.addBones);
                     WarnPositionBones(animator, entry, skeleton);
 
                     var session = new MotionRecorderSession(skeleton, _settings);
@@ -200,8 +197,8 @@ namespace MudShip.MotionRecorder
         {
             // 要求した位置記録ボーン数 (腰の明示指定 + 追加ボーン)。腰の自動採用 (Humanoid Hips) は含めない。
             int requested = entry.hipBone != null ? 1 : 0;
-            if (entry.positionBones != null)
-                foreach (var t in entry.positionBones)
+            if (entry.addBones != null)
+                foreach (var t in entry.addBones)
                     if (t != null) requested++;
 
             int recorded = skeleton.PositionBoneIndices.Length;

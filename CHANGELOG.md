@@ -10,10 +10,10 @@ All notable changes to this package will be documented in this file.
   root ボーンを勝手に拾うフォールバックを撤去し、解決できない場合は位置を記録せず警告するようにした。
 
 ### Added
-- `MotionRecorderBehaviour.Target`：記録対象を **Animator ＋ Hip Bone ＋ Position Bones** で指定可能に。
+- `MotionRecorderBehaviour.Target`：記録対象を **Animator ＋ Hip Bone ＋ Add Bones** で指定可能に。
   - **Hip Bone**：localPosition を記録する腰ボーン。空なら Humanoid の Hips を自動採用。
-  - **Position Bones**：腰に加えて位置も記録する追加ボーン（ツイストボーン等）。
-- `SkeletonDefinition.FromAnimator(Animator, Transform hipBone, IReadOnlyList<Transform> extraPositionBones, bool)`
+  - **Add Bones**：腰に加えて localPosition も記録する追加ボーン（ツイストボーン等）。localRotation は全ボーンで記録される。
+- `SkeletonDefinition.FromAnimator(Animator, Transform hipBone, IReadOnlyList<Transform> addBones)`
   オーバーロード（腰＋追加位置ボーンの明示指定版）。
 - 録画停止時に `AssetDatabase.Refresh()`（Editor のみ）。出力先が Assets 配下なら `.msrc` が自動で取り込まれる。
 
@@ -26,6 +26,8 @@ All notable changes to this package will be documented in this file.
 
 ### Removed
 - `.msrc → .anim` の **Tools ▸ MudShip Recorder** メニュー（ファイル選択変換）。右クリック変換に一本化。
+- `MotionRecorderBehaviour` の **Include Root** オプション（`_includeRoot`）。
+  `SkeletonDefinition.FromHierarchy` / `FromAnimator` の `includeRoot` 引数も廃止（root 自身は常に記録対象外）。
 
 ## [0.2.0] - 2026-06-26
 

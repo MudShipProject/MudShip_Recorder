@@ -36,20 +36,21 @@ namespace MudShip.MotionRecorder
         public int Stride => MsrcFormat.ComputeStride(Bones.Length, PositionBoneIndices.Length);
 
         /// <summary>
-        /// root 以下の全 Transform を走査してスケルトン定義を構築する。
+        /// root 以下の全 Transform (root 自身は除く) を走査してスケルトン定義を構築する。
+        /// 全ボーンの localRotation が記録対象となり、<paramref name="positionBones"/> に挙げたものは
+        /// 加えて localPosition も記録される。
         /// </summary>
-        /// <param name="root">走査の基準。</param>
+        /// <param name="root">走査の基準 (root 自身は記録対象に含めない)。</param>
         /// <param name="positionBones">localPosition も記録するボーン群 (root 配下に含まれるもののみ採用)。null/空なら位置記録なし。</param>
-        /// <param name="includeRoot">root 自身もボーンに含めるか (既定 false)。</param>
         public static SkeletonDefinition FromHierarchy(
-            Transform root, IReadOnlyList<Transform> positionBones = null, bool includeRoot = false)
+            Transform root, IReadOnlyList<Transform> positionBones = null)
         {
             if (root == null)
                 throw new System.ArgumentNullException(nameof(root));
 
             var bones = new List<Transform>(128);
             var paths = new List<string>(128);
-            Collect(root, root, includeRoot, bones, paths);
+            Collect(root, root, bones, paths);
 
             var indexOf = new Dictionary<Transform, int>(bones.Count);
             for (int i = 0; i < bones.Count; i++)
@@ -68,29 +69,28 @@ namespace MudShip.MotionRecorder
 
         /// <summary>
         /// Animator からスケルトン定義を構築する。root は Animator の Transform。
-        /// 腰は <see cref="FromAnimator(Animator, Transform, IReadOnlyList{Transform}, bool)"/> に委譲し、
+        /// 腰は <see cref="FromAnimator(Animator, Transform, IReadOnlyList{Transform})"/> に委譲し、
         /// 明示指定が無ければ Humanoid の Hips を自動採用する。
         /// </summary>
-        public static SkeletonDefinition FromAnimator(Animator animator, bool includeRoot = false)
-            => FromAnimator(animator, null, null, includeRoot);
+        public static SkeletonDefinition FromAnimator(Animator animator)
+            => FromAnimator(animator, null, null);
 
         /// <summary>
         /// Animator からスケルトン定義を構築する。root は Animator の Transform。
-        /// localPosition を記録するボーンは次の順で集める:
+        /// localRotation は root 配下の全ボーンで記録される。localPosition を記録するボーンは次の順で集める:
         /// <list type="number">
         /// <item><b>腰</b>: <paramref name="hipBone"/> があればそれ。無指定かつ Humanoid なら Hips を自動採用。
         /// 非 Humanoid で無指定なら腰は記録しない (root ボーンを勝手に拾うことはしない)。</item>
-        /// <item><b>追加</b>: <paramref name="extraPositionBones"/> (ツイストボーン等、腰以外で位置も要るもの)。</item>
+        /// <item><b>追加</b>: <paramref name="addBones"/> (ツイストボーン等、腰以外で位置も要るもの。
+        /// これらは元々 localRotation が記録されており、加えて localPosition も記録される)。</item>
         /// </list>
         /// root 配下に無いボーンは <see cref="FromHierarchy"/> 側で除外される。重複は除く。
         /// </summary>
         /// <param name="animator">記録対象。Transform 以下を全走査して回転を記録する。</param>
         /// <param name="hipBone">localPosition を記録する腰ボーン。null なら Humanoid の Hips を自動。</param>
-        /// <param name="extraPositionBones">腰に加えて localPosition を記録する追加ボーン群 (任意)。</param>
-        /// <param name="includeRoot">root 自身もボーンに含めるか (既定 false)。</param>
+        /// <param name="addBones">腰に加えて localPosition も記録する追加ボーン群 (任意)。</param>
         public static SkeletonDefinition FromAnimator(
-            Animator animator, Transform hipBone, IReadOnlyList<Transform> extraPositionBones,
-            bool includeRoot = false)
+            Animator animator, Transform hipBone, IReadOnlyList<Transform> addBones)
         {
             if (animator == null)
                 throw new System.ArgumentNullException(nameof(animator));
@@ -106,21 +106,20 @@ namespace MudShip.MotionRecorder
             if (hip != null && seen.Add(hip))
                 posBones.Add(hip);
 
-            // 2) 追加の位置記録ボーン (ツイストボーン等)。
-            if (extraPositionBones != null)
+            // 2) 追加で位置も記録するボーン (ツイストボーン等)。回転は全ボーン共通で既に記録される。
+            if (addBones != null)
             {
-                foreach (var t in extraPositionBones)
+                foreach (var t in addBones)
                     if (t != null && seen.Add(t))
                         posBones.Add(t);
             }
 
-            return FromHierarchy(animator.transform, posBones, includeRoot);
+            return FromHierarchy(animator.transform, posBones);
         }
 
-        static void Collect(Transform root, Transform node, bool includeRoot,
-            List<Transform> bones, List<string> paths)
+        static void Collect(Transform root, Transform node, List<Transform> bones, List<string> paths)
         {
-            if (node != root || includeRoot)
+            if (node != root)
             {
                 bones.Add(node);
                 paths.Add(BuildRelativePath(root, node));
@@ -128,7 +127,7 @@ namespace MudShip.MotionRecorder
 
             int n = node.childCount;
             for (int i = 0; i < n; i++)
-                Collect(root, node.GetChild(i), includeRoot, bones, paths);
+                Collect(root, node.GetChild(i), bones, paths);
         }
 
         static string BuildRelativePath(Transform root, Transform t)

@@ -22,7 +22,7 @@
 1. シーンの GameObject に **MudShip ▸ Motion Recorder**（`MotionRecorderBehaviour`）を追加。
 2. Inspector の **Targets** に記録対象を登録。各要素で `Animator` を指定する。
    - **Hip Bone**：`localPosition` を記録する腰ボーン。空なら Humanoid の Hips を自動採用。Generic リグや腰の自動取得が効かない場合はここに腰ボーンを明示指定する。
-   - **Position Bones**：腰に加えて位置も記録したい追加ボーン（ツイストボーン等）。通常は空でよい。
+   - **Add Bones**：腰に加えて位置も記録したい追加ボーン（ツイストボーン等）。回転は全ボーンで記録されるので、ここに挙げると位置も加わる。通常は空でよい。
 3. **プレイモードに入り**、Inspector の「● 録画開始」→「■ 停止」。
 4. `.msrc` が出力先（既定 `persistentDataPath/MotionRecordings`）に保存される。出力先がプロジェクト（Assets 配下）なら停止時に自動で `AssetDatabase.Refresh()` され、プロジェクトに取り込まれる。
 
