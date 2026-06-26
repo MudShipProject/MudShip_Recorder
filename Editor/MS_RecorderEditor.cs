@@ -13,19 +13,52 @@ namespace MudShip.MotionRecorder.Editor
     public class MS_RecorderEditor : UnityEditor.Editor
     {
         SerializedProperty _slots;
+        double _lastRepaint;
 
         void OnEnable()
         {
             _slots = serializedObject.FindProperty("_slots");
+            EditorApplication.update += ThrottledRepaint;
+        }
+
+        void OnDisable()
+        {
+            EditorApplication.update -= ThrottledRepaint;
+        }
+
+        // 録画中の状態表示更新は ~10Hz に間引く。毎フレーム Repaint するとインスペクタの
+        // 再描画コストがゲームのフレームレートを大きく削るため。
+        void ThrottledRepaint()
+        {
+            var recorder = target as MS_Recorder;
+            if (recorder == null || !recorder.IsRecording)
+                return;
+
+            double now = EditorApplication.timeSinceStartup;
+            if (now - _lastRepaint >= 0.1)
+            {
+                _lastRepaint = now;
+                Repaint();
+            }
         }
 
         public override void OnInspectorGUI()
         {
+            var recorder = (MS_Recorder)target;
+
+            // 録画中はスロット一覧の描画 (ObjectField/リスト) を丸ごとスキップし、
+            // ボタンと状態表示だけにする。これが録画中のインスペクタ負荷の主因。
+            if (Application.isPlaying && recorder.IsRecording)
+            {
+                DrawRecordButton(recorder);
+                DrawStatus(recorder);
+                return;
+            }
+
             serializedObject.Update();
             DrawSlots();
             serializedObject.ApplyModifiedProperties();
 
-            var recorder = (MS_Recorder)target;
             EditorGUILayout.Space();
 
             if (!Application.isPlaying)
@@ -38,9 +71,6 @@ namespace MudShip.MotionRecorder.Editor
 
             DrawRecordButton(recorder);
             DrawStatus(recorder);
-
-            if (recorder.IsRecording)
-                Repaint(); // 録画中はフレーム数をライブ更新
         }
 
         void DrawSlots()
