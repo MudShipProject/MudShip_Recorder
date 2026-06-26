@@ -12,9 +12,22 @@ namespace MudShip.MotionRecorder.Editor
     [CustomEditor(typeof(MotionRecorderBehaviour))]
     public class MotionRecorderBehaviourEditor : UnityEditor.Editor
     {
+        SerializedProperty _targets;
+        SerializedProperty _outputDirectory;
+        SerializedProperty _includeRoot;
+        SerializedProperty _settings;
+
+        void OnEnable()
+        {
+            _targets = serializedObject.FindProperty("_targets");
+            _outputDirectory = serializedObject.FindProperty("_outputDirectory");
+            _includeRoot = serializedObject.FindProperty("_includeRoot");
+            _settings = serializedObject.FindProperty("_settings");
+        }
+
         public override void OnInspectorGUI()
         {
-            DrawDefaultInspector();
+            DrawFields();
 
             var recorder = (MotionRecorderBehaviour)target;
 
@@ -35,6 +48,44 @@ namespace MudShip.MotionRecorder.Editor
 
             if (recorder.IsRecording)
                 Repaint(); // 録画中はフレーム数をライブ更新
+        }
+
+        void DrawFields()
+        {
+            serializedObject.Update();
+
+            EditorGUILayout.PropertyField(_targets, true);
+
+            // 出力先フォルダ: テキスト欄 + フォルダ選択ボタン
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                EditorGUILayout.PropertyField(_outputDirectory);
+                if (GUILayout.Button("参照…", GUILayout.Width(56)))
+                    BrowseOutputDirectory();
+            }
+            if (string.IsNullOrEmpty(_outputDirectory.stringValue))
+                EditorGUILayout.LabelField(" ", "未設定の場合は persistentDataPath/MotionRecordings を使用", EditorStyles.miniLabel);
+
+            EditorGUILayout.PropertyField(_includeRoot);
+            EditorGUILayout.PropertyField(_settings, true);
+
+            serializedObject.ApplyModifiedProperties();
+        }
+
+        void BrowseOutputDirectory()
+        {
+            var recorder = (MotionRecorderBehaviour)target;
+            string current = recorder.ResolveOutputDirectory();
+            if (!Directory.Exists(current))
+                current = Application.persistentDataPath;
+
+            string selected = EditorUtility.OpenFolderPanel("録画の出力先フォルダを選択", current, "");
+            if (string.IsNullOrEmpty(selected))
+                return; // キャンセル
+
+            _outputDirectory.stringValue = selected;
+            serializedObject.ApplyModifiedProperties();
+            GUIUtility.ExitGUI(); // OpenFolderPanel 後のレイアウト不整合を防ぐ
         }
 
         static void DrawRecordButton(MotionRecorderBehaviour recorder)

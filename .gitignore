@@ -5,6 +5,8 @@
 
 # Unity 開発プロジェクト一式 (パッケージの一部ではない)
 /MudShipRecorder/
+# Unity が隣接フォルダに対して生成する meta (パッケージ外)
+/MudShipRecorder.meta
 
 # OS / エディタ生成物
 .DS_Store

@@ -1,7 +1,11 @@
-# MudShip Motion Recorder
+# MudShip Recorder
 
-ヒューマノイド／スケルトンの Transform を **低負荷・GC フリー** で記録する `.msrc` レコーダー。
-録画中はバイナリのダンプのみを行い、メインプロジェクトのフレームレートに寄生しない設計。
+ヒューマノイド／スケルトンの Transform を **低負荷・GC フリー** で記録する `.msrc` レコーダーと、
+`.msrc → .anim` 変換ツール。録画中はバイナリのダンプのみを行い、メインプロジェクトの
+フレームレートに寄生しない設計。将来的に Facial / DMX など他ストリームの記録にも拡張予定。
+
+- Package id: `com.mudship.recorder`
+- 主な録画モジュール: `MotionRecorderBehaviour`（モーション）
 
 ## 設計の要点
 
@@ -41,6 +45,18 @@ session.Stop();
 session.Dispose();
 ```
 
+## .msrc → .anim 変換（Editor）
+
+録画した `.msrc` を `AnimationClip` (.anim) に変換できる（オフライン後処理）。
+全フレームにキーを打つ**ロスレス**変換で、各フレーム時刻の値は元データと完全一致する。
+
+- **Tools ▸ MudShip Recorder ▸ Convert .msrc to .anim…** — ファイルを選んで変換（既定で `persistentDataPath/MotionRecordings` を開く）。
+- Assets 内の `.msrc` を**右クリック ▸ MudShip Recorder ▸ Convert .msrc to .anim**。
+
+生成されるのは Transform パスに紐づく **generic クリップ**で、記録時と同じ root 相対パス構造の
+リグでのみ正しく再生される（リターゲット不可）。尺が長いとキー数が多く重くなる点に注意
+（軽量化＝キーフレーム削減は今後対応）。
+
 ## 公開 API
 
 | 型 | 役割 |
@@ -67,5 +83,5 @@ stride = 8 + posBoneCount*12 + boneCount*16
 ## 今後の予定
 
 - `.msrc` 直再生器（Transform へ直接適用）
-- `.anim` エクスポータ（オフライン・`Keyframe[]` 一括生成でロスレス）→ キーフレーム削減
+- `.anim` のキーフレーム削減（段2・誤差許容つき軽量化）
 - Facial（BlendShape）／DMX ストリーム、共通タイムコード同期
