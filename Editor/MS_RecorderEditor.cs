@@ -284,10 +284,11 @@ namespace MudShip.MotionRecorder.Editor
             {
                 foreach (var s in sessions)
                 {
-                    // ファイル名の拡張子（.msrm/.msrf/.msrt/.msrc）が種別を表す。
+                    // ファイル名の拡張子（.msrm/.msrf/.msrt/.msrc/.msra）が種別を表す。
                     string file = string.IsNullOrEmpty(s.FilePath) ? "-" : Path.GetFileName(s.FilePath);
                     string state = s.Faulted ? "  (エラー)" : "";
-                    EditorGUILayout.LabelField(file, $"{s.FrameCount} frames{state}");
+                    string extra = s is AudioRecorderSession a ? $", peak {a.Peak:F3}" : "";
+                    EditorGUILayout.LabelField(file, $"{s.FrameCount} frames{extra}{state}");
                 }
             }
         }

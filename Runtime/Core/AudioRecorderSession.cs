@@ -42,6 +42,9 @@ namespace MudShip.MotionRecorder
         /// <summary>実際に使用しているデバイス名（Start 後に有効）。</summary>
         public string Device => _device;
 
+        /// <summary>記録中に観測した最大振幅（0..1）。入力レベル確認用。</summary>
+        public float Peak => _peak;
+
         public AudioRecorderSession(string device, int sampleRate, RecorderSettings settings)
         {
             _requestedDevice = device;
