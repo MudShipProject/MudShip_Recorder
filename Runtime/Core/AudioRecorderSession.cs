@@ -93,9 +93,6 @@ namespace MudShip.MotionRecorder
 
             FilePath = filePath;
             IsRecording = true;
-
-            Debug.Log($"[MS_Recorder][Audio] 開始: device='{_device}', {_sampleRate}Hz, {_channels}ch, ring={_clipFrames} frames" +
-                      (Microphone.IsRecording(_device) ? "" : "  ※Microphone.IsRecording=false（録音が始まっていない可能性）"));
         }
 
         public void CaptureFrame(double timestamp)
@@ -133,8 +130,6 @@ namespace MudShip.MotionRecorder
                 }
                 _writer.Finish();
 
-                double sec = _sampleRate > 0 ? (double)FrameCount / _sampleRate : 0;
-                Debug.Log($"[MS_Recorder][Audio] 停止: {FrameCount} frames ({sec:F2}s), peak={_peak:F4}, device='{_device}'");
                 if (FrameCount == 0)
                     Debug.LogWarning("[MS_Recorder][Audio] サンプルが 0 でした。デバイスから信号が来ていません。" +
                                      "Windows のマイク権限（デスクトップアプリの許可）、Windows サウンド設定での録音デバイス有効化/レベル、" +
