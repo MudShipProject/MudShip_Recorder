@@ -18,75 +18,113 @@ namespace MudShip.MotionRecorder.Editor
     /// </summary>
     public static class MsrAnimConverter
     {
-        // ---- メニュー: Assets 内で選択した .msrm/.msrf を右クリック変換 ----------------
+        // ---- メニュー: Assets 内で選択した .msrm/.msrf を右クリック変換 (複数選択可) ----
 
         [MenuItem("Assets/MudShip/Convert recording to .anim", true)]
         static bool ConvertSelectedValidate()
         {
-            var obj = Selection.activeObject;
-            if (obj == null)
-                return false;
-            string path = AssetDatabase.GetAssetPath(obj);
-            return !string.IsNullOrEmpty(path) && IsSupported(path);
+            foreach (string guid in Selection.assetGUIDs)
+                if (IsSupported(AssetDatabase.GUIDToAssetPath(guid)))
+                    return true;
+            return false;
         }
 
         [MenuItem("Assets/MudShip/Convert recording to .anim", false, 2000)]
         static void ConvertSelected()
         {
-            string assetPath = AssetDatabase.GetAssetPath(Selection.activeObject);
             string projectRoot = Path.GetDirectoryName(Application.dataPath); // .../<Project>
-            string fullPath = Path.Combine(projectRoot, assetPath);
-            Convert(fullPath);
-        }
 
-        static bool IsSupported(string path)
-            => path.EndsWith(MsrmFormat.Extension, StringComparison.OrdinalIgnoreCase)
-            || path.EndsWith(MsrfFormat.Extension, StringComparison.OrdinalIgnoreCase);
+            var targets = new System.Collections.Generic.List<string>();
+            foreach (string guid in Selection.assetGUIDs)
+            {
+                string p = AssetDatabase.GUIDToAssetPath(guid);
+                if (IsSupported(p))
+                    targets.Add(p);
+            }
+            if (targets.Count == 0)
+                return;
 
-        // ---- 変換本体 -----------------------------------------------------------
+            int success = 0;
+            string lastOut = null;
 
-        public static void Convert(string srcPath)
-        {
             try
             {
-                AnimationClip clip;
-                int frameCount;
+                for (int i = 0; i < targets.Count; i++)
+                {
+                    string assetPath = targets[i];
+                    EditorUtility.DisplayProgressBar("MudShip Recorder",
+                        $"変換中… {Path.GetFileName(assetPath)} ({i + 1}/{targets.Count})",
+                        (float)i / targets.Count);
+                    try
+                    {
+                        lastOut = ConvertAsset(assetPath, projectRoot);
+                        success++;
+                    }
+                    catch (Exception e)
+                    {
+                        Debug.LogException(e);
+                    }
+                }
 
-                string ext = Path.GetExtension(srcPath);
-                if (ext.Equals(MsrmFormat.Extension, StringComparison.OrdinalIgnoreCase))
-                    clip = BuildMotion(srcPath, out frameCount);
-                else if (ext.Equals(MsrfFormat.Extension, StringComparison.OrdinalIgnoreCase))
-                    clip = BuildFace(srcPath, out frameCount);
-                else
-                    throw new InvalidDataException($"未対応の拡張子です: {ext}");
-
-                string defaultName = Path.GetFileNameWithoutExtension(srcPath);
-                string savePath = EditorUtility.SaveFilePanelInProject(
-                    ".anim の保存先を選択 (Assets 内)", defaultName, "anim",
-                    "生成した AnimationClip の保存先を選んでください");
-
-                if (string.IsNullOrEmpty(savePath))
-                    return; // キャンセル
-
-                AssetDatabase.CreateAsset(clip, savePath);
                 AssetDatabase.SaveAssets();
-                AssetDatabase.ImportAsset(savePath);
-
-                var saved = AssetDatabase.LoadAssetAtPath<AnimationClip>(savePath);
-                EditorGUIUtility.PingObject(saved);
-                Selection.activeObject = saved;
-
-                Debug.Log($"[MudShip Recorder] 変換完了: {savePath} ({frameCount} frames, {clip.length:F2}s)");
-            }
-            catch (Exception e)
-            {
-                Debug.LogException(e);
-                EditorUtility.DisplayDialog("変換失敗", $"変換に失敗しました:\n{e.Message}", "OK");
+                AssetDatabase.Refresh();
             }
             finally
             {
                 EditorUtility.ClearProgressBar();
             }
+
+            if (!string.IsNullOrEmpty(lastOut))
+            {
+                var saved = AssetDatabase.LoadAssetAtPath<AnimationClip>(lastOut);
+                if (saved != null)
+                {
+                    EditorGUIUtility.PingObject(saved);
+                    Selection.activeObject = saved;
+                }
+            }
+
+            Debug.Log($"[MudShip Recorder] {success}/{targets.Count} 件を .anim に変換しました。");
+        }
+
+        static bool IsSupported(string path)
+            => !string.IsNullOrEmpty(path)
+            && (path.EndsWith(MsrmFormat.Extension, StringComparison.OrdinalIgnoreCase)
+             || path.EndsWith(MsrfFormat.Extension, StringComparison.OrdinalIgnoreCase));
+
+        // ---- 変換本体 (元ファイルと同じフォルダへ .anim を出力。保存先ポップアップは出さない) ----
+
+        /// <summary>1 つの .msrm/.msrf アセットを変換し、同じフォルダに .anim を作って保存先パスを返す。</summary>
+        static string ConvertAsset(string assetPath, string projectRoot)
+        {
+            string fullPath = Path.Combine(projectRoot, assetPath);
+            string ext = Path.GetExtension(assetPath);
+
+            AnimationClip clip;
+            bool isFace;
+            if (ext.Equals(MsrmFormat.Extension, StringComparison.OrdinalIgnoreCase))
+            {
+                clip = BuildMotion(fullPath, out _);
+                isFace = false;
+            }
+            else if (ext.Equals(MsrfFormat.Extension, StringComparison.OrdinalIgnoreCase))
+            {
+                clip = BuildFace(fullPath, out _);
+                isFace = true;
+            }
+            else
+            {
+                throw new InvalidDataException($"未対応の拡張子です: {ext}");
+            }
+
+            // 元ファイルと同じ Assets フォルダへ出力。モーションと表情で名前が衝突しないよう表情には _face を付ける。
+            string dir = Path.GetDirectoryName(assetPath);
+            string baseName = Path.GetFileNameWithoutExtension(assetPath) + (isFace ? "_face" : "");
+            string outPath = AssetDatabase.GenerateUniqueAssetPath(
+                Path.Combine(dir, baseName + ".anim").Replace('\\', '/'));
+
+            AssetDatabase.CreateAsset(clip, outPath);
+            return outPath;
         }
 
         // ---- .msrm (モーション) -------------------------------------------------

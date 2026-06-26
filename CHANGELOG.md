@@ -24,6 +24,9 @@ All notable changes to this package will be documented in this file.
 - **（破壊的）`MotionRecorderBehaviour` を廃止**し `MS_Recorder` に統合（記録エンジンは再利用部品として存続）。
   録画設定はシーンの Targets から SO プロファイル＋スロットへ再編。既存シーンは作り直しになる。
 - `.anim` 変換メニューを **Assets ▸ MudShip ▸ Convert recording to .anim**（`.msrm`/`.msrf` 両対応）に統合。
+  **複数選択をまとめて変換可能**にし、保存先ポップアップを廃止（元ファイルと同じフォルダへ出力。表情は `_face` 付与）。
+- `MS_Recorder` インスペクタ UI を整理（スロットをカード／折りたたみ表示、Motion/Facial のセクション分け、余白調整）。
+- 録画中はインスペクタのスロット描画をスキップし、状態表示の再描画を ~10Hz に間引き（録画開始時のフレームレート低下を解消）。
 
 ### Removed
 - 旧 `.msrc` 形式（`MSRC`）。旧 `.msrc` ファイルは新コンバータでは読めない。

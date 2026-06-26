@@ -5,7 +5,7 @@ using UnityEngine;
 namespace MudShip.MotionRecorder.Editor
 {
     /// <summary>
-    /// <see cref="MS_Recorder"/> 用のカスタムインスペクタ。スロットごとに、参照中の
+    /// <see cref="MS_Recorder"/> 用のカスタムインスペクタ。スロットをカード表示し、参照中の
     /// <see cref="MS_RecorderSettings"/> の type に応じてシーン参照フィールドを出し分ける。
     /// プレイモード中は録画開始/停止ボタンと各セッションの状態を表示する。
     /// </summary>
@@ -46,6 +46,8 @@ namespace MudShip.MotionRecorder.Editor
         {
             var recorder = (MS_Recorder)target;
 
+            EditorGUILayout.Space(2);
+
             // 録画中はスロット一覧の描画 (ObjectField/リスト) を丸ごとスキップし、
             // ボタンと状態表示だけにする。これが録画中のインスペクタ負荷の主因。
             if (Application.isPlaying && recorder.IsRecording)
@@ -59,7 +61,7 @@ namespace MudShip.MotionRecorder.Editor
             DrawSlots();
             serializedObject.ApplyModifiedProperties();
 
-            EditorGUILayout.Space();
+            EditorGUILayout.Space(10);
 
             if (!Application.isPlaying)
             {
@@ -73,79 +75,128 @@ namespace MudShip.MotionRecorder.Editor
             DrawStatus(recorder);
         }
 
+        // ---- スロット ------------------------------------------------------------
+
         void DrawSlots()
         {
-            EditorGUILayout.LabelField("Slots", EditorStyles.boldLabel);
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                EditorGUILayout.LabelField($"Recording Slots ({_slots.arraySize})", EditorStyles.boldLabel);
+                GUILayout.FlexibleSpace();
+                if (GUILayout.Button("＋ 追加", GUILayout.Width(72)))
+                    AddSlot();
+            }
+
+            if (_slots.arraySize == 0)
+            {
+                EditorGUILayout.Space(2);
+                EditorGUILayout.HelpBox("スロットがありません。「＋ 追加」で録画対象を追加してください。", MessageType.Info);
+                return;
+            }
+
+            EditorGUILayout.Space(4);
 
             int removeAt = -1;
             for (int i = 0; i < _slots.arraySize; i++)
             {
-                var slot = _slots.GetArrayElementAtIndex(i);
-                var settingsProp = slot.FindPropertyRelative("settings");
-
-                using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
-                {
-                    using (new EditorGUILayout.HorizontalScope())
-                    {
-                        EditorGUILayout.LabelField($"Slot {i + 1}", EditorStyles.boldLabel);
-                        if (GUILayout.Button("削除", GUILayout.Width(48)))
-                            removeAt = i;
-                    }
-
-                    EditorGUILayout.PropertyField(settingsProp, new GUIContent("Settings (Profile)"));
-
-                    var so = settingsProp.objectReferenceValue as MS_RecorderSettings;
-                    if (so == null)
-                    {
-                        EditorGUILayout.HelpBox("MS_RecorderSettings（プロファイル）を割り当ててください。", MessageType.Warning);
-                    }
-                    else if (so.Type == MS_RecorderSettings.RecorderType.Character)
-                    {
-                        EditorGUILayout.PropertyField(slot.FindPropertyRelative("animator"));
-                        EditorGUILayout.PropertyField(slot.FindPropertyRelative("hipBone"));
-                        EditorGUILayout.PropertyField(slot.FindPropertyRelative("addBones"), true);
-                        EditorGUILayout.PropertyField(slot.FindPropertyRelative("faceRenderers"), true);
-                    }
-                    else
-                    {
-                        EditorGUILayout.HelpBox($"type = {so.Type} は未実装です（枠のみ）。", MessageType.Info);
-                    }
-                }
+                DrawSlotCard(i, ref removeAt);
+                EditorGUILayout.Space(6);
             }
 
             if (removeAt >= 0)
                 _slots.DeleteArrayElementAtIndex(removeAt);
+        }
 
-            if (GUILayout.Button("＋ スロット追加"))
+        void DrawSlotCard(int i, ref int removeAt)
+        {
+            var slot = _slots.GetArrayElementAtIndex(i);
+            var settingsProp = slot.FindPropertyRelative("settings");
+            var so = settingsProp.objectReferenceValue as MS_RecorderSettings;
+
+            using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
             {
-                _slots.InsertArrayElementAtIndex(_slots.arraySize);
-                // 直前要素のコピーになるため、参照を空にして新規スロットとして扱う。
-                var added = _slots.GetArrayElementAtIndex(_slots.arraySize - 1);
-                added.FindPropertyRelative("settings").objectReferenceValue = null;
-                added.FindPropertyRelative("animator").objectReferenceValue = null;
-                added.FindPropertyRelative("hipBone").objectReferenceValue = null;
-                added.FindPropertyRelative("addBones").ClearArray();
-                added.FindPropertyRelative("faceRenderers").ClearArray();
+                // ヘッダ行: 折りたたみ / バッジ / 削除
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    slot.isExpanded = EditorGUILayout.Foldout(slot.isExpanded, $"Slot {i + 1}", true);
+                    GUILayout.FlexibleSpace();
+
+                    string badge = so == null ? "プロファイル未設定" : $"{so.Type}";
+                    GUILayout.Label(badge, EditorStyles.miniLabel);
+
+                    if (GUILayout.Button("✕", GUILayout.Width(22)))
+                        removeAt = i;
+                }
+
+                if (!slot.isExpanded)
+                    return;
+
+                EditorGUILayout.Space(2);
+                EditorGUI.indentLevel++;
+
+                EditorGUILayout.PropertyField(settingsProp, new GUIContent("Settings (Profile)"));
+
+                if (so == null)
+                {
+                    EditorGUILayout.HelpBox("MS_RecorderSettings（プロファイル）を割り当ててください。", MessageType.Warning);
+                }
+                else if (so.Type == MS_RecorderSettings.RecorderType.Character)
+                {
+                    EditorGUILayout.Space(4);
+                    EditorGUILayout.LabelField("Motion", EditorStyles.miniBoldLabel);
+                    EditorGUILayout.PropertyField(slot.FindPropertyRelative("animator"));
+                    EditorGUILayout.PropertyField(slot.FindPropertyRelative("hipBone"));
+                    EditorGUILayout.PropertyField(slot.FindPropertyRelative("addBones"), true);
+
+                    EditorGUILayout.Space(4);
+                    EditorGUILayout.LabelField("Facial", EditorStyles.miniBoldLabel);
+                    EditorGUILayout.PropertyField(slot.FindPropertyRelative("faceRenderers"), true);
+                }
+                else
+                {
+                    EditorGUILayout.HelpBox($"type = {so.Type} は未実装です（枠のみ）。", MessageType.Info);
+                }
+
+                EditorGUI.indentLevel--;
             }
         }
+
+        void AddSlot()
+        {
+            int idx = _slots.arraySize;
+            _slots.InsertArrayElementAtIndex(idx);
+
+            // 直前要素のコピーになるため、参照を空にして新規スロットとして扱う。
+            var added = _slots.GetArrayElementAtIndex(idx);
+            added.isExpanded = true;
+            added.FindPropertyRelative("settings").objectReferenceValue = null;
+            added.FindPropertyRelative("animator").objectReferenceValue = null;
+            added.FindPropertyRelative("hipBone").objectReferenceValue = null;
+            added.FindPropertyRelative("addBones").ClearArray();
+            added.FindPropertyRelative("faceRenderers").ClearArray();
+        }
+
+        // ---- 録画ボタン・状態 ----------------------------------------------------
 
         static void DrawRecordButton(MS_Recorder recorder)
         {
             Color prev = GUI.backgroundColor;
             using (new EditorGUILayout.HorizontalScope())
             {
+                GUILayout.Space(2);
                 if (!recorder.IsRecording)
                 {
                     GUI.backgroundColor = new Color(0.85f, 0.30f, 0.30f);
-                    if (GUILayout.Button("● 録画開始", GUILayout.Height(32)))
+                    if (GUILayout.Button("● 録画開始", GUILayout.Height(36)))
                         recorder.StartRecording();
                 }
                 else
                 {
                     GUI.backgroundColor = new Color(0.45f, 0.45f, 0.45f);
-                    if (GUILayout.Button("■ 停止", GUILayout.Height(32)))
+                    if (GUILayout.Button("■ 停止", GUILayout.Height(36)))
                         recorder.StopRecording();
                 }
+                GUILayout.Space(2);
             }
             GUI.backgroundColor = prev;
         }
@@ -156,20 +207,23 @@ namespace MudShip.MotionRecorder.Editor
             if (total == 0)
                 return;
 
-            EditorGUILayout.Space();
+            EditorGUILayout.Space(6);
             EditorGUILayout.LabelField(recorder.IsRecording ? "録画中" : "直近の記録", EditorStyles.boldLabel);
 
-            foreach (var s in recorder.MotionSessions)
-                DrawSessionLine("[M]", s.FilePath, s.FrameCount, s.Faulted);
-            foreach (var s in recorder.FaceSessions)
-                DrawSessionLine("[F]", s.FilePath, s.FrameCount, s.Faulted);
+            using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
+            {
+                foreach (var s in recorder.MotionSessions)
+                    DrawSessionLine("M", s.FilePath, s.FrameCount, s.Faulted);
+                foreach (var s in recorder.FaceSessions)
+                    DrawSessionLine("F", s.FilePath, s.FrameCount, s.Faulted);
+            }
         }
 
         static void DrawSessionLine(string tag, string path, int frames, bool faulted)
         {
             string file = string.IsNullOrEmpty(path) ? "-" : Path.GetFileName(path);
-            string state = faulted ? " (エラー)" : "";
-            EditorGUILayout.LabelField($"{tag} {file}", $"{frames} frames{state}");
+            string state = faulted ? "  (エラー)" : "";
+            EditorGUILayout.LabelField($"[{tag}] {file}", $"{frames} frames{state}");
         }
     }
 }
