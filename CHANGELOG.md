@@ -25,7 +25,8 @@ All notable changes to this package will be documented in this file.
   `Take`（番号、`<Take>` に 3 桁ゼロ詰めで展開）を追加。命名規則を **`(prefix)_(type)_(object)_(date)`** に統一。
 - **インスペクタ UI を ReorderableList 化**（ドラッグ並べ替え／＋－）。種別ごとに左端をカラー表示
   （Character=青 / Camera=橙 / Transform=緑 / Audio=紫）。各要素は**折りたたみ可**・**表示名（label）を編集可能**。
-  カラーラインと折りたたみ三角の被りを解消、行間を広げて視認性を改善。
+  カラーラインと折りたたみ三角の被りを解消。展開時は General / Motion / Facial 等のグループに分け、
+  グループ間に十分な余白を確保（区切り線は使わない）。
 - `IRecorderSession`：全セッション共通インターフェイス。`MS_Recorder` は種別を問わず統一して駆動する。
 - `ChunkedStreamWriter`：形式非依存の汎用チャンクライタ（旧 `MsrcStreamWriter` を抽出・共通化）。
 - `.msrf`/`.msrt`/`.msrc → .anim` 変換（表情は `blendShape.<名前>`、Transform/Camera は対象自身の TRS、Camera は `field of view` も）。

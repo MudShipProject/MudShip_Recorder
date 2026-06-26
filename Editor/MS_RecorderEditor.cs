@@ -168,20 +168,13 @@ namespace MudShip.MotionRecorder.Editor
 
             void Gap(float h) { y += h; }
 
-            // グループの区切り（薄い線＋見出し＋前後の余白）
+            // グループの見出し（区切り線なし・前に十分な余白）
             void Group(string title)
             {
-                Gap(8f);
-                if (draw)
-                {
-                    var sepR = new Rect(x, y, w, 1f);
-                    EditorGUI.DrawRect(sepR, new Color(1f, 1f, 1f, 0.08f));
-                }
-                y += 1f;
-                Gap(4f);
+                Gap(16f);
                 var hr = Row(line);
                 if (draw) EditorGUI.LabelField(hr, title, EditorStyles.miniBoldLabel);
-                Gap(1f);
+                Gap(3f);
             }
 
             Gap(4f);
