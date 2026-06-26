@@ -16,25 +16,9 @@ namespace MudShip.MotionRecorder.Editor
     /// </summary>
     public static class MsrcAnimConverter
     {
-        // ---- メニュー: ファイルを選んで変換 -------------------------------------
-
-        [MenuItem("Tools/MudShip Recorder/Convert .msrc to .anim…")]
-        static void ConvertFromFilePanel()
-        {
-            string startDir = Path.Combine(Application.persistentDataPath, "MotionRecordings");
-            if (!Directory.Exists(startDir))
-                startDir = Application.persistentDataPath;
-
-            string msrcPath = EditorUtility.OpenFilePanel("変換する .msrc を選択", startDir, "msrc");
-            if (string.IsNullOrEmpty(msrcPath))
-                return;
-
-            Convert(msrcPath);
-        }
-
         // ---- メニュー: Assets 内で選択した .msrc を右クリック変換 ----------------
 
-        [MenuItem("Assets/MudShip Recorder/Convert .msrc to .anim", true)]
+        [MenuItem("Assets/MudShip/Convert .msrc to .anim", true)]
         static bool ConvertSelectedValidate()
         {
             var obj = Selection.activeObject;
@@ -45,7 +29,7 @@ namespace MudShip.MotionRecorder.Editor
                    path.EndsWith(MsrcFormat.Extension, StringComparison.OrdinalIgnoreCase);
         }
 
-        [MenuItem("Assets/MudShip Recorder/Convert .msrc to .anim", false, 2000)]
+        [MenuItem("Assets/MudShip/Convert .msrc to .anim", false, 2000)]
         static void ConvertSelected()
         {
             string assetPath = AssetDatabase.GetAssetPath(Selection.activeObject);

@@ -27,9 +27,13 @@ namespace MudShip.MotionRecorder
             [Tooltip("記録対象の Animator。Transform 以下を全走査して localRotation を記録する。")]
             public Animator animator;
 
-            [Tooltip("localPosition も記録するボーン (通常は腰/Hips)。\n" +
-                     "空の場合: Humanoid なら Hips を自動採用。Humanoid 以外では位置を記録せず警告 (回転のみ)。\n" +
-                     "Generic リグや腰以外を狙いたい場合はここに対象 Transform を明示指定する。")]
+            [Tooltip("localPosition を記録する腰ボーン。\n" +
+                     "空の場合: Humanoid なら Hips を自動採用。Humanoid 以外では腰の位置を記録せず警告。\n" +
+                     "Generic リグや腰の自動取得が効かない場合はここに腰ボーンを明示指定する。")]
+            public Transform hipBone;
+
+            [Tooltip("腰に加えて localPosition も記録する追加ボーン (ツイストボーン等)。\n" +
+                     "回転だけでなく位置も必要なボーンがあればここに指定する。通常は空でよい。")]
             public List<Transform> positionBones = new List<Transform>();
         }
 
@@ -87,7 +91,7 @@ namespace MudShip.MotionRecorder
 
                 try
                 {
-                    var skeleton = SkeletonDefinition.FromAnimator(animator, entry.positionBones, _includeRoot);
+                    var skeleton = SkeletonDefinition.FromAnimator(animator, entry.hipBone, entry.positionBones, _includeRoot);
                     WarnPositionBones(animator, entry, skeleton);
 
                     var session = new MotionRecorderSession(skeleton, _settings);
@@ -133,6 +137,12 @@ namespace MudShip.MotionRecorder
             }
 
             RecordingStopped?.Invoke();
+
+#if UNITY_EDITOR
+            // 出力先がプロジェクト (Assets) 配下なら、書き出した .msrc をエディタに取り込む。
+            // session.Stop() は IO スレッドの join まで行うので、ここでファイルは確定済み。
+            UnityEditor.AssetDatabase.Refresh();
+#endif
         }
 
         void LateUpdate()
@@ -188,7 +198,8 @@ namespace MudShip.MotionRecorder
         /// <summary>位置記録ボーンの解決結果を検査し、取りこぼし・未指定を警告する。</summary>
         void WarnPositionBones(Animator animator, Target entry, SkeletonDefinition skeleton)
         {
-            int requested = 0;
+            // 要求した位置記録ボーン数 (腰の明示指定 + 追加ボーン)。腰の自動採用 (Humanoid Hips) は含めない。
+            int requested = entry.hipBone != null ? 1 : 0;
             if (entry.positionBones != null)
                 foreach (var t in entry.positionBones)
                     if (t != null) requested++;
@@ -197,13 +208,13 @@ namespace MudShip.MotionRecorder
 
             if (requested > 0 && recorded < requested)
                 Debug.LogWarning(
-                    $"[MotionRecorder] '{animator.name}': 指定された位置記録ボーンの一部が Animator の階層外のため除外されました ({recorded}/{requested})。",
+                    $"[MotionRecorder] '{animator.name}': 指定した位置記録ボーンの一部が Animator の階層外のため除外されました ({recorded}/{requested})。",
                     this);
 
             if (recorded == 0)
                 Debug.LogWarning(
                     $"[MotionRecorder] '{animator.name}': localPosition を記録するボーンがありません (回転のみ記録)。" +
-                    "Humanoid 以外、または腰を記録したい場合は対象の Position Bones に腰ボーンを指定してください。",
+                    "Humanoid 以外、または腰を記録したい場合は対象の Hip Bone に腰ボーンを指定してください。",
                     this);
         }
 

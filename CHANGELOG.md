@@ -10,16 +10,22 @@ All notable changes to this package will be documented in this file.
   root ボーンを勝手に拾うフォールバックを撤去し、解決できない場合は位置を記録せず警告するようにした。
 
 ### Added
-- `MotionRecorderBehaviour.Target`：記録対象を **Animator ＋ 位置記録ボーン（任意）** のペアで指定可能に。
-  Generic リグや腰以外を狙う場合は Inspector の **Position Bones** に対象 Transform を明示指定する。
-  空なら Humanoid の Hips を自動採用（従来どおり）。
-- `SkeletonDefinition.FromAnimator(Animator, IReadOnlyList<Transform>, bool)` オーバーロード
-  （位置記録ボーンの明示指定版）。
+- `MotionRecorderBehaviour.Target`：記録対象を **Animator ＋ Hip Bone ＋ Position Bones** で指定可能に。
+  - **Hip Bone**：localPosition を記録する腰ボーン。空なら Humanoid の Hips を自動採用。
+  - **Position Bones**：腰に加えて位置も記録する追加ボーン（ツイストボーン等）。
+- `SkeletonDefinition.FromAnimator(Animator, Transform hipBone, IReadOnlyList<Transform> extraPositionBones, bool)`
+  オーバーロード（腰＋追加位置ボーンの明示指定版）。
+- 録画停止時に `AssetDatabase.Refresh()`（Editor のみ）。出力先が Assets 配下なら `.msrc` が自動で取り込まれる。
 
 ### Changed
 - **（破壊的）** `MotionRecorderBehaviour` の `_targets` を `List<Animator>` → `List<Target>` に変更。
   公開プロパティ `Targets` の型も `IList<Animator>` → `IList<Target>` に変更。
   既存シーンの Targets 割り当ては失われるため、Animator を再アサインすること。
+- `.msrc → .anim` の右クリックメニューを **Assets ▸ MudShip Recorder ▸ …** → **Assets ▸ MudShip ▸ …** に変更。
+- 出力先フォルダの「参照…」ダイアログの起点をプロジェクトルート（Assets の親）に変更。
+
+### Removed
+- `.msrc → .anim` の **Tools ▸ MudShip Recorder** メニュー（ファイル選択変換）。右クリック変換に一本化。
 
 ## [0.2.0] - 2026-06-26
 

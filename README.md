@@ -21,10 +21,10 @@
 
 1. シーンの GameObject に **MudShip ▸ Motion Recorder**（`MotionRecorderBehaviour`）を追加。
 2. Inspector の **Targets** に記録対象を登録。各要素で `Animator` を指定する。
-   - **Humanoid**：そのままで OK（Hips の `localPosition` を自動記録）。
-   - **Generic／腰以外を狙う**：その要素の **Position Bones** に位置記録したい腰ボーン等の `Transform` を明示指定する。
+   - **Hip Bone**：`localPosition` を記録する腰ボーン。空なら Humanoid の Hips を自動採用。Generic リグや腰の自動取得が効かない場合はここに腰ボーンを明示指定する。
+   - **Position Bones**：腰に加えて位置も記録したい追加ボーン（ツイストボーン等）。通常は空でよい。
 3. **プレイモードに入り**、Inspector の「● 録画開始」→「■ 停止」。
-4. `.msrc` が出力先（既定 `persistentDataPath/MotionRecordings`）に保存される。
+4. `.msrc` が出力先（既定 `persistentDataPath/MotionRecordings`）に保存される。出力先がプロジェクト（Assets 配下）なら停止時に自動で `AssetDatabase.Refresh()` され、プロジェクトに取り込まれる。
 
 ## 使い方（コードから）
 
@@ -52,8 +52,7 @@ session.Dispose();
 録画した `.msrc` を `AnimationClip` (.anim) に変換できる（オフライン後処理）。
 全フレームにキーを打つ**ロスレス**変換で、各フレーム時刻の値は元データと完全一致する。
 
-- **Tools ▸ MudShip Recorder ▸ Convert .msrc to .anim…** — ファイルを選んで変換（既定で `persistentDataPath/MotionRecordings` を開く）。
-- Assets 内の `.msrc` を**右クリック ▸ MudShip Recorder ▸ Convert .msrc to .anim**。
+- Assets 内の `.msrc` を**右クリック ▸ MudShip ▸ Convert .msrc to .anim**。
 
 生成されるのは Transform パスに紐づく **generic クリップ**で、記録時と同じ root 相対パス構造の
 リグでのみ正しく再生される（リターゲット不可）。尺が長いとキー数が多く重くなる点に注意

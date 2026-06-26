@@ -74,12 +74,10 @@ namespace MudShip.MotionRecorder.Editor
 
         void BrowseOutputDirectory()
         {
-            var recorder = (MotionRecorderBehaviour)target;
-            string current = recorder.ResolveOutputDirectory();
-            if (!Directory.Exists(current))
-                current = Application.persistentDataPath;
+            // プロジェクトのルート (Assets の親) を起点に開く。
+            string projectRoot = Path.GetDirectoryName(Application.dataPath);
 
-            string selected = EditorUtility.OpenFolderPanel("録画の出力先フォルダを選択", current, "");
+            string selected = EditorUtility.OpenFolderPanel("録画の出力先フォルダを選択", projectRoot, "");
             if (string.IsNullOrEmpty(selected))
                 return; // キャンセル
 
